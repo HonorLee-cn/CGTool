@@ -9,13 +9,15 @@
  */
 
 
+using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace CGTool
 {
     //动画周期回调
-    public delegate void AnimeCallback();
+    public delegate void AnimeCallback(Anime.ActionType actionType);
     
     //动画动作帧监听
     public delegate void AnimeEffectListener(Anime.EffectType effect);
@@ -28,14 +30,13 @@ namespace CGTool
     
     /**
      * 动画播放器,用于播放CG动画,支持多动画队列播放
-     * 脚本需绑定至挂载了SpriteRenderer和RectTransform的对象上
-     * 除此之外,还需绑定BoxCollider2D(可选),用于监听鼠标的移入移出事件
+     * 脚本需绑定至挂载了SpriteRenderer、Image和RectTransform的对象上
+     * ########除此之外,还需绑定BoxCollider2D(可选),用于监听鼠标的移入移出事件#####此条删除
      *
      * 当动画播放完成后会自动调用onFinishCallback回调函数
      * 另外可指定onActionListener和onAudioListener监听动画动作帧和音频帧
      * 目前已知的动作帧有:
-     * 击中 0x27 | 0x28
-     * 伤害结算 0x4E | 0x4F
+     * 击中 伤害结算
      */
     public class AnimePlayer : MonoBehaviour
     {
@@ -53,15 +54,18 @@ namespace CGTool
         {
             public uint AnimeSerial;
             public Anime.DirectionType Direction;
-            public Anime.ActionType ActionType;
-            public bool Infinity;
+            public Anime.ActionType actionType;
+            public Anime.PlayType playType;
             public float Speed;
             public float FrameRate;
             public AnimeDetail AnimeDetail;
             public AnimeCallback onFinishCallback;
         }
         
+        
+        
         //当前播放
+        private uint _currentSerial;
         private AnimeOption _currentAnime;
         private AnimeFrame[] _frames;
         private int _currentFrame;
@@ -74,9 +78,24 @@ namespace CGTool
         
         //计时器
         private float _timer;
+        //下一帧延迟
+        private float _delay;
         
-        //绑定SpriteRenderer
+        //绑定渲染对象
+        [SerializeField,Header("Image渲染")] public bool isRenderByImage = false;
         private SpriteRenderer _spriteRenderer;
+        private Image _imageRenderer;
+        private int _paletIndex = 0;
+        public int PaletIndex
+        {
+            get { return _paletIndex; }
+            set
+            {
+                _paletIndex = value;
+                if (_currentAnime != null) _play(_currentAnime);
+            }
+        }
+        
         //绑定RectTransform
         private RectTransform _rectTransform;
         //绑定BoxCollider2D(可选)
@@ -95,8 +114,8 @@ namespace CGTool
         {
             get
             {
-                float offsetX = -_frames[_currentFrame].GraphicInfo.OffsetX;
-                float offsetY = _frames[_currentFrame].GraphicInfo.OffsetY;
+                float offsetX = -_frames[_currentFrame].AnimeFrameInfo.OffsetX;
+                float offsetY = _frames[_currentFrame].AnimeFrameInfo.OffsetY;
                 return new Vector2(offsetX, offsetY);
             }
         }
@@ -104,10 +123,18 @@ namespace CGTool
         //实例初始化时获取相关绑定
         private void Awake()
         {
-            _spriteRenderer = GetComponentInParent<SpriteRenderer>();
-            _rectTransform = GetComponentInParent<RectTransform>();
+            //调整渲染
+            _imageRenderer = GetComponent<Image>();
+            _spriteRenderer = GetComponent<SpriteRenderer>();
+            _rectTransform = GetComponent<RectTransform>();
             //碰撞盒,仅当需要添加鼠标事件时使用
             _boxCollider2D = GetComponent<BoxCollider2D>();
+            
+        }
+
+        private void Start()
+        {
+            _updateRenderMode();
         }
 
         //鼠标移入监听
@@ -121,6 +148,61 @@ namespace CGTool
         {
             if(onMouseExitListener!=null) onMouseExitListener(this);
         }
+        
+        // 使用Image模式渲染
+        public bool RenderByImage
+        {
+            get => isRenderByImage;
+            set
+            {
+                isRenderByImage = value;
+                _updateRenderMode();
+            }
+        }
+        
+        // 设置当前播放序列,默认方向North,动作Stand,播放类型Loop,播放速度1f
+        public uint Serial
+        {
+            get => _currentSerial;
+            set
+            {
+                Anime.DirectionType direction =
+                    _currentAnime?.Direction ?? Anime.DirectionType.North;
+                Anime.ActionType actionType = _currentAnime?.actionType ?? Anime.ActionType.Stand;
+                Anime.PlayType playType = _currentAnime?.playType ?? Anime.PlayType.Loop;
+                float speed = _currentAnime?.Speed ?? 1f;
+                AnimeCallback onFinishCallback = _currentAnime?.onFinishCallback;
+                play(value, direction, actionType, playType, speed, onFinishCallback);
+            }
+        }
+        
+        // 动态调整播放类型
+        public Anime.PlayType PlayType
+        {
+            get => _currentAnime?.playType ?? Anime.PlayType.Loop;
+            set
+            {
+                if (_currentAnime != null)
+                {
+                    _currentAnime.playType = value;
+                }
+            }
+        }
+
+        // 更新渲染模式
+        private void _updateRenderMode()
+        {
+            if (isRenderByImage)
+            {
+                _imageRenderer.enabled = true;
+                _spriteRenderer.enabled = false;
+            }
+            else
+            {
+                _imageRenderer.enabled = false;
+                _spriteRenderer.enabled = true;
+            }
+        }
 
         /**
          * 播放动画,调用此方法将会清空当前播放队列,调用完成可通过链式调用nextPlay方法添加动画到播放队列
@@ -132,41 +214,68 @@ namespace CGTool
          * @param onFinishCallback 动画结束回调
          * @return AnimePlayer
          */
-        public AnimePlayer play(uint Serial,Anime.DirectionType Direction,Anime.ActionType ActionType,bool Infinity = false,float Speed=1f,AnimeCallback onFinishCallback=null)
+        public AnimePlayer play(uint Serial, Anime.DirectionType Direction = Anime.DirectionType.North,
+            Anime.ActionType actionType = Anime.ActionType.Stand, Anime.PlayType playType = Anime.PlayType.Once,
+            float Speed = 1f, AnimeCallback onFinishCallback = null)
         {
             if (_spriteRenderer == null)
             {
-                Debug.Log("AnimePlayer:SpriteRenderer is null");
+                // Debug.Log("AnimePlayer:SpriteRenderer is null");
                 return this;
             }
-            AnimeOption animeOption = CreateAnimeOption(Serial, Direction, ActionType, Infinity, Speed, onFinishCallback);
+            AnimeOption animeOption = CreateAnimeOption(Serial, Direction, actionType, playType, Speed, onFinishCallback);
             if (animeOption == null)
             {
-                Debug.Log("AnimePlayer:AnimeOption create failed");
+                if (onFinishCallback != null) onFinishCallback(actionType);
+                // Debug.Log("AnimePlayer:AnimeOption create failed");
                 return this;
             }
             //清空播放队列
             _animeQueue.Clear();
             //播放
+            _currentSerial = Serial;
             _play(animeOption);
             
             //链式调用,后续可通过nextPlay方法添加动画到播放队列
             return this;
         }
 
+        //播放动画
+        public AnimePlayer play(uint Serial, Anime.PlayType playType, float speed = 1f,
+            AnimeCallback onFinishCallback = null)
+        {
+            return play(Serial,Anime.DirectionType.North,Anime.ActionType.Stand,playType,speed,onFinishCallback);
+        }
+
+        //播放一次
+        public AnimePlayer playOnce(Anime.DirectionType directionType,Anime.ActionType actionType,float Speed=1f,AnimeCallback onFinishCallback=null)
+        {
+            return play(_currentSerial, directionType, actionType, Anime.PlayType.Once,
+                Speed, onFinishCallback);
+        }
+        
+        //播放循环
+        public AnimePlayer playLoop(Anime.DirectionType directionType,Anime.ActionType actionType,float Speed=1f,AnimeCallback onFinishCallback=null)
+        {
+            return play(_currentSerial, directionType, actionType, Anime.PlayType.Loop,
+                Speed, onFinishCallback);
+        }
+
         //调整动画方向
         public void changeDirection(Anime.DirectionType directionType)
         {
-            _currentAnime = CreateAnimeOption(_currentAnime.AnimeSerial, directionType, _currentAnime.ActionType,
-                _currentAnime.Infinity, _currentAnime.Speed, _currentAnime.onFinishCallback);
+            if (directionType == _currentAnime.Direction || directionType == Anime.DirectionType.NULL) return;
+            _currentAnime = CreateAnimeOption(_currentAnime.AnimeSerial, directionType, _currentAnime.actionType,
+                _currentAnime.playType, _currentAnime.Speed, _currentAnime.onFinishCallback);
             _play(_currentAnime);
         }
         
         //调整动画动作类型
         public void changeActionType(Anime.ActionType actionType)
         {
+            if (actionType == _currentAnime.actionType) return;
             _currentAnime = CreateAnimeOption(_currentAnime.AnimeSerial, _currentAnime.Direction,actionType,
-                _currentAnime.Infinity, _currentAnime.Speed, _currentAnime.onFinishCallback);
+                _currentAnime.playType, _currentAnime.Speed, _currentAnime.onFinishCallback);
             _play(_currentAnime);
         }
 
@@ -174,12 +283,14 @@ namespace CGTool
         private void _play(AnimeOption animeOption)
         {
             isPlayable = false;
-            _currentAnime = animeOption;
-            _frames = new AnimeFrame[animeOption.AnimeDetail.FrameCount];
+            _currentAnime = null;
             
+            AnimeFrame[] frames = new AnimeFrame[animeOption.AnimeDetail.FrameCount];
+
             //获取动画帧数据
             for (int i = 0; i < animeOption.AnimeDetail.AnimeFrameInfos.Length; i++)
             {
+                AnimeFrameInfo animeFrameInfo = animeOption.AnimeDetail.AnimeFrameInfos[i];
                 GraphicInfoData graphicInfoData = GraphicInfo.GetGraphicInfoDataByIndex(animeOption.AnimeDetail.Version, animeOption.AnimeDetail.AnimeFrameInfos[i].GraphicIndex);
                 if (graphicInfoData == null)
                 {
@@ -187,7 +298,8 @@ namespace CGTool
                               animeOption.AnimeDetail.AnimeFrameInfos[i] + " is null");
                     continue;
                 }
-                GraphicData graphicData = Graphic.GetGraphicData(graphicInfoData);
+
+                GraphicData graphicData = Graphic.GetGraphicData(graphicInfoData, _paletIndex);
                 if (graphicData == null)
                 {
                     Debug.Log("GraphicData Version:" + animeOption.AnimeDetail.Version + " Index:" +
@@ -196,34 +308,59 @@ namespace CGTool
                 }
                 
                 //创建帧数据
-                _frames[i] = new AnimeFrame();
-                _frames[i].Index = i;
-                _frames[i].GraphicInfo = graphicInfoData;
-                _frames[i].Sprite = graphicData.Sprite;
-                _frames[i].AnimeFrameInfo = animeOption.AnimeDetail.AnimeFrameInfos[i];
+                frames[i] = new AnimeFrame();
+                frames[i].Index = i;
+                frames[i].GraphicInfo = graphicInfoData;
+                frames[i].Sprite = graphicData.Sprite;
+                frames[i].AnimeFrameInfo = animeFrameInfo;
             }
 
+            _currentAnime = animeOption;
+            _frames = frames;
             _currentFrame = -1;
             isPlayable = true;
+            gameObject.SetActive(true);
             UpdateFrame();
+        }
+
+        //播放延时
+        public void DelayPlay(float delayTime)
+        {
+            _delay = delayTime*1000;
+        }
+
+        public void Stop()
+        {
+            isPlayable = false;
+            _currentAnime = null;
+            _frames = null;
+            _currentFrame = -1;
+            gameObject.SetActive(false);
+        }
+
+        //修改播放类型---重复方法--考虑删掉
+        public void ChangePlayType(Anime.PlayType playType)
+        {
+            if (_currentAnime == null) return;
+            _currentAnime.playType = playType;
         }
 
         //创建动画配置
         private AnimeOption CreateAnimeOption(uint Serial, Anime.DirectionType Direction, Anime.ActionType ActionType,
-            bool Infinity = false, float Speed = 1f, AnimeCallback onFinishCallback = null)
+            Anime.PlayType playType=Anime.PlayType.Once, float Speed = 1f, AnimeCallback onFinishCallback = null)
         {
             AnimeDetail animeDetail = Anime.GetAnimeDetail(Serial, Direction, ActionType);
             if (animeDetail == null)
             {
-                Debug.Log("AnimePlayer:AnimeDetail is null");
+                // Debug.Log("AnimePlayer:AnimeDetail is null");
                 return null;
             }
             AnimeOption animeOption = new AnimeOption()
             {
                 AnimeSerial = Serial,
                 Direction = Direction,
-                ActionType = ActionType,
-                Infinity = Infinity,
+                actionType = ActionType,
+                playType = playType,
                 Speed = Speed,
                 FrameRate = animeDetail.CycleTime / Speed / animeDetail.FrameCount,
                 AnimeDetail = animeDetail,
@@ -234,24 +371,44 @@ namespace CGTool
 
         //加入链式动画播放队列
         public AnimePlayer nextPlay(uint Serial, Anime.DirectionType Direction, Anime.ActionType ActionType,
-            bool Infinity = false, float Speed = 1f, AnimeCallback onFinishCallback = null)
+            Anime.PlayType playType=Anime.PlayType.Once, float Speed = 1f, AnimeCallback onFinishCallback = null)
         {
-            AnimeOption animeOption = CreateAnimeOption(Serial, Direction, ActionType, Infinity, Speed, onFinishCallback);
-            if (animeOption == null) return this;
-            _animeQueue.Enqueue(animeOption);
+            AnimeOption animeOption = CreateAnimeOption(Serial, Direction, ActionType, playType, Speed, onFinishCallback);
+            if (animeOption == null)
+            {
+                if (onFinishCallback != null) onFinishCallback(ActionType);
+                return this;
+            }
+            if (_animeQueue.Count == 0)
+            {
+                _play(animeOption);
+            }
+            else
+            {
+                _animeQueue.Enqueue(animeOption);    
+            }
+            
             return this;
+        }
+        
+        //加入链式动画播放队列
+        public AnimePlayer nextPlay(Anime.DirectionType Direction, Anime.ActionType ActionType,
+            Anime.PlayType playType=Anime.PlayType.Once, float Speed = 1f, AnimeCallback onFinishCallback = null)
+        {
+            return nextPlay(_currentSerial, Direction, ActionType, playType, Speed, onFinishCallback);
         }
         
         //更新计算
         private void Update()
         {
             float now = Time.time * 1000;
-            if (_currentAnime != null && (now - _timer) >= _currentAnime.FrameRate) UpdateFrame();
+            if (_currentAnime != null && (now - _timer - _delay) >= _currentAnime.FrameRate) UpdateFrame();
         }
 
         //更新帧
         private void UpdateFrame()
         {
+            _delay = 0;
             if (!isPlayable || _frames.Length == 0) return;
             
             _currentFrame++;
@@ -259,23 +416,36 @@ namespace CGTool
             //动画结束
             if (_currentFrame >= _currentAnime.AnimeDetail.FrameCount)
             {
-                if(_currentAnime.onFinishCallback!=null) _currentAnime.onFinishCallback();
+                if(_currentAnime.onFinishCallback!=null) _currentAnime.onFinishCallback(_currentAnime.actionType);
                 //循环播放
-                if (_currentAnime.Infinity)
+                if (_currentAnime.playType == Anime.PlayType.Loop)
                 {
                     _currentFrame = 0;
-                }
-                //播放下一个动画
-                else if(_animeQueue.Count>0)
+                }else if (_currentAnime.playType == Anime.PlayType.Once || _currentAnime.playType == Anime.PlayType.OnceAndDestroy)
                 {
-                    AnimeOption animeOption = _animeQueue.Dequeue();
-                    _play(animeOption);
-                    return;
+                    if (_currentAnime.playType == Anime.PlayType.OnceAndDestroy)
+                    {
+                        _spriteRenderer.sprite = null;
+                        _imageRenderer.sprite = null;
+                        _rectTransform.sizeDelta = Vector2.zero;
+                        // gameObject.SetActive(false);
+                    }
+                    //播放下一个动画
+                    if(_animeQueue.Count>0)
+                    {
+                        AnimeOption animeOption = _animeQueue.Dequeue();
+                        _play(animeOption);
+                        return;
+                    }else
+                    {
+                        isPlayable = false;
+                        return;
+                    }
                 }
             }
             
             //问题帧自动跳过
-            if (_frames[_currentFrame] == null) return;
+            if (_currentFrame<_frames.Length && _frames[_currentFrame] == null) return;
             //自动偏移
             // float graphicWidth = _frames[_currentFrame].Sprite.rect.width;
             // float graphicHeight = _frames[_currentFrame].Sprite.rect.height;
@@ -285,12 +455,36 @@ namespace CGTool
             //根据当前帧Sprite动态调整对象大小
             float width = _frames[_currentFrame].Sprite.rect.width * 1f;
             float height = _frames[_currentFrame].Sprite.rect.height * 1f;
+
+            if (isRenderByImage)
+            {
+                _imageRenderer.sprite = _frames[_currentFrame].Sprite;
+                _imageRenderer.SetNativeSize();
+                Vector3 pos = Vector3.zero;
+                pos.x = _frames[_currentFrame].GraphicInfo.OffsetX;
+                pos.y = -_frames[_currentFrame].GraphicInfo.OffsetY;
+                _rectTransform.localPosition = pos;
+                _rectTransform.pivot = new Vector2(0f,1f);
+            }
+            else
+            {
+                _spriteRenderer.sprite = _frames[_currentFrame].Sprite;
+                _rectTransform.sizeDelta = new Vector2(width, height);
+                _spriteRenderer.size = new Vector2(width, height);
+                _rectTransform.pivot = new Vector2(0.5f,0f);
+                _rectTransform.localPosition = Vector3.zero;
+            }
             
-            _spriteRenderer.sprite = 
-                _frames[_currentFrame].Sprite;
-            _rectTransform.sizeDelta = new Vector2(width, height);
-            _spriteRenderer.size = new Vector2(width, height);
-            _rectTransform.pivot = new Vector2(0.5f,0f);
+            // Vector2 offset = Vector2.zero;
+            // offset.x += -(_frames[_currentFrame].GraphicInfo.OffsetX * 1f) / _frames[_currentFrame].GraphicInfo.Width;
+            // offset.y -= (-_frames[_currentFrame].GraphicInfo.OffsetY * 1f) / _frames[_currentFrame].GraphicInfo.Height;
+            
+            // _rectTransform.pivot = offset;
+            
+            // pos.x = (width + _frames[_currentFrame].GraphicInfo.OffsetX)/1f;
+            // pos.y = (height + _frames[_currentFrame].GraphicInfo.OffsetY)/1f;
+            
+            
             
             // 2D碰撞器自动调整,但是动态碰撞器反而会导致重叠大物体选中效果不稳定,效果不如固定大小碰撞器好
             // if (_boxCollider2D != null)

@@ -42,11 +42,12 @@ namespace CGTool
         //bool      穿越标识
         public bool Blocked;
         //1 byte    作为地面无层级遮挡[Test]
-        public byte AsGround;
+        public bool AsGround;
         //4 bytes   未知标识
         public byte[] Unknow;
-        //4 bytes   地图编号
-        public uint MapSerial;
+        //4 bytes   编号
+        public uint Serial;
+        public int[] UnpackedPaletIndex;
     }
 
     public class GraphicInfo:MonoBehaviour
@@ -61,15 +62,38 @@ namespace CGTool
         
         //版本-Map编号映射字典  版本编号 -> MapSerial -> GraphicInfoData
         private static Dictionary<int, Dictionary<uint, GraphicInfoData>>
-            _mapSerialDict = new Dictionary<int, Dictionary<uint, GraphicInfoData>>();
+            _SerialDict = new Dictionary<int, Dictionary<uint, GraphicInfoData>>();
 
-        private static List<string> _graphicInfoPaths = new List<string>()
+        
+        private static Dictionary<int,string> _graphicInfoVersionPrefix = new Dictionary<int, string>()
         {
             //龙之沙漏 之前版本前Info数据
-            "GraphicInfo_66.bin",
+            {0,"GraphicInfo_"},
             //龙之沙漏 版本Info数据
-            "GraphicInfoEx_5.bin"
+            {1,"GraphicInfoEx_"}
         };
+        
+        private static List<string> _graphicInfoPaths = new List<string>();
+
+        public static void Init()
+        {
+            DirectoryInfo directoryInfo = new DirectoryInfo(CGTool.BaseFolder);
+            FileInfo[] files = directoryInfo.GetFiles();
+            //查找所有GraphicInfo数据文件
+            for (int i = 0; i < _graphicInfoVersionPrefix.Count; i++)
+            {
+                foreach (FileInfo fileInfo in files)
+                {
+                    if (fileInfo.Name.StartsWith(_graphicInfoVersionPrefix[i]))
+                    {
+                        _graphicInfoPaths.Add(fileInfo.Name);
+                        List<GraphicInfoData> list = GetGraphicInfo(i);
+                        Debug.Log("初始化GraphicInfo数据,版本号:" + i + ",数据量:" + list.Count + "条");
+                        break;
+                    }
+                }
+            }
+        }
 
         //获取GraphicInfo数据,Info数据加载后会缓存
         public static List<GraphicInfoData> GetGraphicInfo(int Version)
@@ -79,21 +103,34 @@ namespace CGTool
             
             //初始化映射库
             _indexDict.Add(Version,new Dictionary<uint, GraphicInfoData>());
-            _mapSerialDict.Add(Version,new Dictionary<uint, GraphicInfoData>());
+            _SerialDict.Add(Version,new Dictionary<uint, GraphicInfoData>());
             //加载并初始化数据
             List<GraphicInfoData> infoDatas = _loadGraphicInfo(Version);
             _cache.Add(Version, infoDatas);
             
             return infoDatas;
         }
-        //通过地面编号获取GraphicInfo数据
-        public static GraphicInfoData GetGraphicInfoDataByMapSerial(int Version, uint MapSerial)
+        //通过编号获取GraphicInfo数据
+        public static GraphicInfoData GetGraphicInfoDataBySerial(int Version, uint Serial)
         {
             GraphicInfoData graphicInfoData = null;
-            if (_mapSerialDict.ContainsKey(Version))
+            if (_SerialDict.ContainsKey(Version))
             {
-                _mapSerialDict[Version].TryGetValue(MapSerial, out graphicInfoData);
+                _SerialDict[Version].TryGetValue(Serial, out graphicInfoData);
                 // graphicInfoData = _mapSerialDict[Version][MapSerial];
+            }
+
+            return graphicInfoData;
+        }
+        //通过编号获取GraphicInfo数据
+        public static GraphicInfoData GetGraphicInfoDataBySerial(uint Serial)
+        {
+            int Version = Serial >= 2000000 ? 1 : 0;
+            GraphicInfoData graphicInfoData = null;
+            if (_SerialDict.ContainsKey(Version) && _SerialDict[Version].ContainsKey(Serial))
+            {
+                
+                graphicInfoData = _SerialDict[Version][Serial];
             }
 
             return graphicInfoData;
@@ -109,6 +146,8 @@ namespace CGTool
 
             return graphicInfoData;
         }
+        
+        
         
         //初始化加载GraphicInfo
         private static List<GraphicInfoData> _loadGraphicInfo(int Version)
@@ -139,13 +178,13 @@ namespace CGTool
                 graphicInfoData.East = fileReader.ReadByte();
                 graphicInfoData.South = fileReader.ReadByte();
                 graphicInfoData.Blocked =  fileReader.ReadByte() == 0;
-                graphicInfoData.AsGround = fileReader.ReadByte();
+                graphicInfoData.AsGround = fileReader.ReadByte() == 1;
                 graphicInfoData.Unknow = fileReader.ReadBytes(4);
-                graphicInfoData.MapSerial = BitConverter.ToUInt32(fileReader.ReadBytes(4),0);
+                graphicInfoData.Serial = BitConverter.ToUInt32(fileReader.ReadBytes(4),0);
 
                 //建立映射表
                 if(!_indexDict[Version].ContainsKey(graphicInfoData.Index)) _indexDict[Version].Add(graphicInfoData.Index, graphicInfoData);
-                if(graphicInfoData.MapSerial > 0 && !_mapSerialDict[Version].ContainsKey(graphicInfoData.MapSerial)) _mapSerialDict[Version].Add(graphicInfoData.MapSerial, graphicInfoData);
+                if(graphicInfoData.Serial > 0 && !_SerialDict[Version].ContainsKey(graphicInfoData.Serial)) _SerialDict[Version].Add(graphicInfoData.Serial, graphicInfoData);
                 
                 infoDatas.Add(graphicInfoData);
 

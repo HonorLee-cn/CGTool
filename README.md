@@ -50,8 +50,8 @@ Graphic.GetGraphicData(GraphicInfoData graphicInfoData,int PaletIndex=0);
 * 当动画播放完成后会自动调用onFinishCallback回调函数
 * 另外可指定onActionListener和onAudioListener监听动画动作帧和音频帧
 * 目前已知的动作帧有:
-* 击中 0x27 | 0x28
-* 伤害结算 0x4E | 0x4F
+* 击中 20000
+* 伤害结算 10000
 */
 
 /**
@@ -80,30 +80,48 @@ AnimePlayer player.play(...params).nextPlay(...params);
 请根据情况自行探索修改代码适应应用场景
 
 ## 3、版本及功能概述
+### 1.1
+> `ADD` 音频索引及加载AudioTool
+> 
+> `ADD` 动画播放器添加对Image渲染支持，用以支持GUI动画播放
+> 
+> `ADD` Graphic增加地面图档动态合批
+> 
+> `ADD` Anime增加动画帧动态合批方法
+> 
+> `UPD` 优化Graphic解析，统一改为RGBA4444模式，以减少内存占用
+> 
+> `UPD` 重新整理初始化代码，优化初始化流程
+> 
+> `UPD` 优化动画播放器，增加动画相关处理方法
+> 
+> `UPD` 动画播放器添加对Image渲染支持，用以支持GUI动画播放
+> 
+> `FIX` 修复动画序列中攻击判定、音频序列解析方式错误的问题
+
 ### 1.0
 
 当前版本目前仅支持 魔力宝贝3.7-龙之沙漏 及以下版本的图档解析
 
->`ADD` 脚本初始化
+> `ADD` 脚本初始化
 > 
->`ADD` 图档索引GraphicInfo文件解析
+> `ADD` 图档索引GraphicInfo文件解析
 > 
->`ADD` 图档Graphic文件数据解析
+> `ADD` 图档Graphic文件数据解析
 > 
->`ADD` 调色板Palet文件解析
+> `ADD` 调色板Palet文件解析
 > 
->`ADD` 动画索引AnimeInfo文件解析
+> `ADD` 动画索引AnimeInfo文件解析
 > 
->`ADD` 动画Anime文件数据解析
+> `ADD` 动画Anime文件数据解析
 > 
->`ADD` <font color="red">服务端</font>地图文件解析
+> `ADD` <font color="red">服务端</font>地图文件解析
 
 
 
 ## 4、待处理
 
 - 支援 4.0 以上版本图档解析
-- 音频解析
 - 其他未知
 - 优化
 

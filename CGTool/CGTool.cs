@@ -12,24 +12,15 @@ using UnityEngine;
 
 namespace CGTool
 {
-    public class CGTool : MonoBehaviour
+    public static class CGTool
     {
-        public readonly static bool DEBUG = true;
         //Bin基础目录
         public readonly static string BaseFolder = System.Environment.CurrentDirectory + "/bin";
         //Palet调色板目录
         public readonly static string PaletFolder = BaseFolder + "/pal";
-        //Datas目录
-        public readonly static string DataFolder = System.Environment.CurrentDirectory + "/data";
         //Map地图文件目录
-        public readonly static string MapFolder = DataFolder + "/map";
-        
-        //日志工具
-        // public readonly static Util.Logger Logger = new Util.Logger("CGTool", DEBUG);
+        public readonly static string MapFolder = BaseFolder + "/map";
 
-        public static bool ShowMapUnitName = true;
-        
-        
         //初始化CGTool
         public static void Init()
         {
@@ -37,12 +28,14 @@ namespace CGTool
             for (int i = 0; i < 16; i++) Palet.GetPalet(i);
             
             //初始化加载并缓存GraphicInfo配置表
-            for (int i = 0; i < 2; i++) GraphicInfo.GetGraphicInfo(i);
-
-            //初始化加载动画序列信息
-            Anime.GetAnimeInfo(0);
-            Anime.GetAnimeInfo(105000);
+            GraphicInfo.Init();
             
+            //初始化图档解析器
+            Graphic.Init();
+            
+            //初始化加载动画序列信息
+            Anime.Init();
+
             //地图索引初始化
             Map.Init();
 

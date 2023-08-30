@@ -11,6 +11,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace CGTool
 {
@@ -27,6 +28,8 @@ namespace CGTool
         public GraphicInfoData GraphicInfo;
         // public uint GraphicIndex;
         public uint MapSerial;
+        public int FixPlayerZ;
+        public int ObjectZIndex = 0;
     }
     //地图信息
     public class MapInfo
@@ -34,11 +37,13 @@ namespace CGTool
         //地图编号
         public uint Serial;
         //地图宽度
-        public uint Width;
+        public int Width;
         //地图高度
-        public uint Height;
+        public int Height;
         // 地图名称
         public string Name;
+        // 调色板号 - 默认 -1 表示自动
+        public int Palet = -1;
         //未知数据
         public byte[] Unknow;
         //地面数据
@@ -46,11 +51,16 @@ namespace CGTool
         //地表数据
         public List<MapBlockData> ObjectDatas = new List<MapBlockData>();
         public bool[] BlockedIndexs;
-        public bool[,] MapPoints;
+        public float[] FixPlayerZs;
+        //地图坐标二维数组,用以记录可行走区域并作为自动寻路的数据参考
+        public bool[,] MapNodes;
     }
+    
     
     public class Map
     {
+        //Z轴修正值
+        public static readonly int FixZIndex = 24;
         
         //缓存数据
         private static Dictionary<uint, MapInfo> _cache = new Dictionary<uint, MapInfo>();
@@ -113,16 +123,23 @@ namespace CGTool
             byte[] mapHeader = mapFileReader.ReadBytes( 8);
             //地图名称
             byte[] mapNameBytes = mapFileReader.ReadBytes(32);
-            mapInfo.Name = System.Text.Encoding.GetEncoding("GBK").GetString(mapNameBytes).Split('|')[0];
+            string[] mapHead = System.Text.Encoding.GetEncoding("GBK").GetString(mapNameBytes).Split('|');
+            mapInfo.Name = mapHead[0];
+            
+            // 调色板
+            if (mapHead.Length>1){
+                if(mapHead[1] != null || mapHead[1] != "") mapInfo.Palet = int.Parse(mapHead[1]);
+            }
+
 
             //读取地图宽度
             byte[] bytes = mapFileReader.ReadBytes(2);
             Array.Reverse(bytes);
-            mapInfo.Width = (uint)BitConverter.ToUInt16(bytes,0);
+            mapInfo.Width = BitConverter.ToUInt16(bytes,0);
             //读取地图高度
             bytes = mapFileReader.ReadBytes(2);
             Array.Reverse(bytes);
-            mapInfo.Height = (uint)BitConverter.ToUInt16(bytes,0);
+            mapInfo.Height = BitConverter.ToUInt16(bytes,0);
 
             byte[] mapBytes = mapFileReader.ReadBytes((int) (mapInfo.Width * mapInfo.Height * 2));
             byte[] mapCoverBytes = mapFileReader.ReadBytes((int) (mapInfo.Width * mapInfo.Height * 2));
@@ -141,8 +158,9 @@ namespace CGTool
             List<MapBlockData> tempObjectTiles = new List<MapBlockData>();
             
             // CGTool.Logger.Write("开始解析时间:" + DateTime.Now);
-            uint len = mapInfo.Width * mapInfo.Height;
-            for (uint i = 0; i < len; i++)
+            //原始数据为反转数据,即坐标起点为 1,1 排序方向为 y : 1=>0 x: 1=>0
+            int len = mapInfo.Width * mapInfo.Height;
+            for (int i = 0; i < len; i++)
             {
                 //地面数据
                 MapBlockData mapTile = null;
@@ -155,7 +173,7 @@ namespace CGTool
                     mapGraphicSerial += 200000;
                     Version = 1;
                 }
-                GraphicInfoData graphicInfoData = GraphicInfo.GetGraphicInfoDataByMapSerial(Version, mapGraphicSerial);
+                GraphicInfoData graphicInfoData = GraphicInfo.GetGraphicInfoDataBySerial(Version, mapGraphicSerial);
                 if (graphicInfoData != null)
                 {
                     mapTile = new MapBlockData();
@@ -174,7 +192,7 @@ namespace CGTool
                     mapCoverGraphicSerial += 200000;
                     Version = 1;
                 }
-                graphicInfoData = GraphicInfo.GetGraphicInfoDataByMapSerial(Version, mapCoverGraphicSerial);
+                graphicInfoData = GraphicInfo.GetGraphicInfoDataBySerial(Version, mapCoverGraphicSerial);
                 if (graphicInfoData != null)
                 {
                     mapCoverTile = new MapBlockData();
@@ -184,59 +202,114 @@ namespace CGTool
                 tempObjectTiles.Add(mapCoverTile);
             }
 
-            List<MapBlockData> GroundTiles = new List<MapBlockData>();
-            List<MapBlockData> ObjectTiles = new List<MapBlockData>();
-            bool[] blockedIndexs = new bool[mapInfo.Width * mapInfo.Height];
+            MapBlockData[] GroundTiles = new MapBlockData[len];
+            MapBlockData[] ObjectTiles = new MapBlockData[len];
+            bool[] blockedIndexs = new bool[len];
+            float[] fixPlayerZs = new float[len];
+            bool[,] nodes = new bool[mapInfo.Width, mapInfo.Height];
+
             // CGTool.Logger.Write("开始排序时间:" + DateTime.Now);
+            //重新排序
             for (int y = 0; y < mapInfo.Height; y++)
             {
                 for (int x = 0; x < mapInfo.Width; x++)
                 {
                     // int index = i * (int) mapInfo.Width + ((int) mapInfo.Width - j - 1);
-                    int _tmpindex = x + (int)((mapInfo.Height - y - 1) * mapInfo.Width);
-                    int index = x + y * (int)mapInfo.Width;
+                    int _tmpindex = x + (mapInfo.Height - y - 1) * mapInfo.Width;
+                    int index = x + y * mapInfo.Width;
                     
-                    MapBlockData mapTile = tempGroundTiles[_tmpindex]; 
+                    MapBlockData mapTile = tempGroundTiles[_tmpindex];
                     MapBlockData ObjectTile = tempObjectTiles[_tmpindex];
-                    
-                    GroundTiles.Add(mapTile);
-                    ObjectTiles.Add(ObjectTile);
+
+                    GroundTiles[index] = mapTile;
+                    ObjectTiles[index] = ObjectTile;
 
                     if (mapTile==null || mapTile.GraphicInfo.Blocked) blockedIndexs[index] = true;
-                    if (ObjectTile!=null && ObjectTile.GraphicInfo.Blocked)
-                    {
-                        blockedIndexs[index] = true;
-                        if (ObjectTile.GraphicInfo.East > 0 || ObjectTile.GraphicInfo.South > 0)
-                        {
-                            for (int i = x; i < (x + ObjectTile.GraphicInfo.East); i++)
-                            {
-                                for (int j = y; j < (y+ ObjectTile.GraphicInfo.South); j++)
-                                {
+                    if (ObjectTile!=null && ObjectTile.GraphicInfo !=null && ObjectTile.GraphicInfo.Blocked) blockedIndexs[index] = true;
+                    
+                    nodes[x, y] = !blockedIndexs[index];
+                    
+                    //角色默认层级
+                    // int objectTileZIndex = index * FixZIndex;
+                    fixPlayerZs[index] = 1;
+                }
+            }
 
-                                    if(i>=mapInfo.Width || j>=mapInfo.Height) continue;
-                                    int _index = (int) (j * mapInfo.Width + i);
-                                    blockedIndexs[_index] = true;
-                                }
+            //整理Object Z轴层级遮挡及角色遮挡问题
+            for (int y = 0; y < mapInfo.Height; y++)
+            {
+                for (int x = 0; x < mapInfo.Width; x++)
+                {
+                    int index = x + y * mapInfo.Width;
+                    int objectTileZIndex = index * FixZIndex;
+
+                    MapBlockData ObjectTile = ObjectTiles[index];
+                    if(ObjectTile==null || ObjectTile.GraphicInfo==null) continue;
+                    
+                    //Object默认层级
+                    ObjectTile.ObjectZIndex = objectTileZIndex;
+
+                    //角色Z轴补正
+                    //在自定义排序轴(1,1,-1)情况下,角色Z轴在物件y-1位置,到x+East位置,补正为48*x
+                    //在物件South+1位置,到x+East位置,补正为-48*x
+                    if (!ObjectTile.GraphicInfo.AsGround)
+                    {
+                        for(int i = x;i<(x+ObjectTile.GraphicInfo.East-1);i++)
+                        {
+                            int fix = 1;
+                            int oy = y - 1;
+                            int _index = (int) (oy * mapInfo.Width + i);
+                            if (fixPlayerZs[_index] == 1) fixPlayerZs[_index] = fix * (i - x + 1) * 240f + 0.1f;
+
+                            // fix = -1;
+                            // oy = y + ObjectTile.GraphicInfo.South;
+                            // _index = (int) (oy * mapInfo.Width + i);
+                            // if (fixPlayerZs[_index] == 0) fixPlayerZs[_index] = fix * (i - x + 1) * 100;
+                        }
+                        for(int i=y+1;i<(y+ObjectTile.GraphicInfo.South);i++)
+                        {
+                            int fix = 1;
+                            int ox = x - 1;
+                            int _index = (int) (i * mapInfo.Width + ox);
+                            if (fixPlayerZs[_index] == 1) fixPlayerZs[_index] = fix * (i - y - 1) * 240f + 0.1f;
+                        }
+                    }
+                    else
+                    {
+                        // ObjectTile.ObjectZIndex = 0;
+                    }
+
+
+                    //如果物件占地范围大于1x1,则需要处理遮挡
+                    if (ObjectTile.GraphicInfo.East > 1 || ObjectTile.GraphicInfo.South > 1)
+                    {
+                        //取物件占地中间点位置
+                        // objectTileZIndex = (x + ObjectTile.GraphicInfo.East / 2 + (y + ObjectTile.GraphicInfo.South / 2) * mapInfo.Width) * FixZIndex;
+                        // ObjectTile.ObjectZIndex = objectTileZIndex;
+                        //取物件左上角位置Z轴复写默认Z轴
+                        // ObjectTile.ObjectZIndex = (x + (y + ObjectTile.GraphicInfo.South) * mapInfo.Width) * FixZIndex;
+                        
+                        
+
+                        for (int i = x; i < (x + ObjectTile.GraphicInfo.East); i++)
+                        {
+                            for (int j = y; j < (y+ ObjectTile.GraphicInfo.South); j++)
+                            {
+                                if(i>=mapInfo.Width || j>=mapInfo.Height) continue;
+                                int _index = (int) (j * mapInfo.Width + i);
+                                blockedIndexs[_index] = true;
+                                nodes[i, j] = false;
                             }
                         }
                     }
                 }
             }
 
-            bool[,] points = new bool[mapInfo.Width, mapInfo.Height];
-            for (int y = 0; y < mapInfo.Height; y++)
-            {
-                for (int x = 0; x < mapInfo.Width; x++)
-                {
-                    int index = x + y * (int)mapInfo.Width;
-                    points[x, y] = !blockedIndexs[index];
-                }
-            }
-
-            mapInfo.GroundDatas = GroundTiles;
-            mapInfo.ObjectDatas = ObjectTiles;
+            mapInfo.GroundDatas = GroundTiles.ToList();
+            mapInfo.ObjectDatas = ObjectTiles.ToList();
             mapInfo.BlockedIndexs = blockedIndexs;
-            mapInfo.MapPoints = points;
+            mapInfo.MapNodes = nodes;
+            mapInfo.FixPlayerZs = fixPlayerZs;
             _cache[serial] = mapInfo;
             // CGTool.Logger.Write("地图解析完成时间:" + DateTime.Now);
             return mapInfo;

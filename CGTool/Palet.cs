@@ -11,6 +11,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using CGR;
 using UnityEngine;
 // using Logger = Util.Logger;
 
@@ -99,12 +101,14 @@ namespace CGTool
                 color32.a = 0xFF;
                 PaletColors.Add(color32);
             }
+            
+            PaletColors.Add(Color.clear);
             //清理缓存
             paletReader.Dispose();
             paletReader.Close();
             paletFileStream.Dispose();
             paletFileStream.Close();
-            
+
             return PaletColors;
         }
     }
