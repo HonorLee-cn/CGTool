@@ -11,7 +11,6 @@
  * 如有其他需要可调整加载方式
  */
 using System.Collections.Generic;
-using System.IO;
 using UnityEngine;
 
 namespace CGTool
