@@ -12,7 +12,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
-// using Logger = Util.Logger;
 
 namespace CGTool
 {
@@ -34,12 +33,28 @@ namespace CGTool
             return paletData;
         }
 
+        //将数字生成指定长度字符串,不足位数补进行填充
+        private static string NumToString(uint num, int len, bool fillZero)
+        {
+            string numStr = num.ToString();
+            
+            if (numStr.Length < len && fillZero)
+            {
+                int count = len - numStr.Length;
+                for (int i = 0; i < count; i++)
+                {
+                    numStr = "0" + numStr;
+                }
+            }
+            return numStr;
+        }
+        
         //加载缓存数据
         private static List<Color32> _loadPalet(int index)
         {
             //查找调色板文件
             DirectoryInfo paletFolderInfo = new DirectoryInfo(CGTool.PaletFolder);
-            string filledIndex = Util.StringTool.numToString((uint)index, 2, true);
+            string filledIndex = NumToString((uint)index, 2, true);
             FileInfo[] files = paletFolderInfo.GetFiles("palet_" + filledIndex + ".cgp");
             if (files.Length == 0) return null;
             // CGTool.Logger.Write("加载调色板 - 编号: " + filledIndex);
