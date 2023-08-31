@@ -11,6 +11,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text.RegularExpressions;
 using UnityEngine;
 
 namespace CGTool
@@ -67,9 +68,9 @@ namespace CGTool
         private static Dictionary<int,string> _graphicInfoVersionPrefix = new Dictionary<int, string>()
         {
             //龙之沙漏 之前版本前Info数据
-            {0,"GraphicInfo_"},
+            {0,@"GraphicInfo_\d+"},
             //龙之沙漏 版本Info数据
-            {1,"GraphicInfoEx_"}
+            {1,@"GraphicInfoEx_\d+"}
         };
         
         private static List<string> _graphicInfoPaths = new List<string>();
@@ -83,7 +84,7 @@ namespace CGTool
             {
                 foreach (FileInfo fileInfo in files)
                 {
-                    if (fileInfo.Name.StartsWith(_graphicInfoVersionPrefix[i]))
+                    if (Regex.IsMatch(fileInfo.Name, _graphicInfoVersionPrefix[i]))
                     {
                         _graphicInfoPaths.Add(fileInfo.Name);
                         List<GraphicInfoData> list = GetGraphicInfo(i);

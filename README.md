@@ -80,7 +80,27 @@ AnimePlayer player.play(...params).nextPlay(...params);
 请根据情况自行探索修改代码适应应用场景
 
 ## 3、版本及功能概述
-### 1.1
+> 当前版本目前仅支持 魔力宝贝3.7-龙之沙漏 及以下版本的图档解析
+> 
+> 目前版本支持以下功能：
+> 
+> * `GraphicInfo` 图档索引解析
+> * `Graphic` 图档数据解析
+> * `Palet` 调色板数据解析
+> * `AnimeInfo` 动画索引解析
+> * `Anime` 动画数据解析
+> * `AudioTool` 音频索引及加载
+> * `AnimePlayer` 动画播放器挂载组件
+> * `Map` 服务端地图数据解析
+
+
+
+## 4、更新日志
+### v 1.2
+
+> `FIX` 修正文件加载时判断为正则，避免因使用不同版本bin导致加载报错问题
+
+### v 1.1
 > `ADD` 音频索引及加载AudioTool
 > 
 > `ADD` 动画播放器添加对Image渲染支持，用以支持GUI动画播放
@@ -99,9 +119,7 @@ AnimePlayer player.play(...params).nextPlay(...params);
 > 
 > `FIX` 修复动画序列中攻击判定、音频序列解析方式错误的问题
 
-### 1.0
-
-当前版本目前仅支持 魔力宝贝3.7-龙之沙漏 及以下版本的图档解析
+### v 1.0
 
 > `ADD` 脚本初始化
 > 
@@ -119,7 +137,7 @@ AnimePlayer player.play(...params).nextPlay(...params);
 
 
 
-## 4、待处理
+## 5、待处理
 
 - 支援 4.0 以上版本图档解析
 - 其他未知

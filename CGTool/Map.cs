@@ -12,6 +12,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace CGTool
 {
@@ -71,14 +72,16 @@ namespace CGTool
         {
             DirectoryInfo mapDirectory = new DirectoryInfo(CGTool.MapFolder);
             FileInfo[] mapFiles = mapDirectory.GetFiles();
+            string match = @"^(\d+)_?(.+)?$";
             foreach (var fileInfo in mapFiles)
             {
                 string filename = fileInfo.Name;
-                if(filename.Equals(".DS_Store")) continue;
+                Match matchRet = Regex.Match(filename, match);
+                if(!matchRet.Success) continue;
+                
                 MapFileInfo _file = new MapFileInfo();
-                string[] indexName = filename.Split(("_").ToCharArray());
-                _file.Serial = uint.Parse(indexName[0]);
-                _file.Name = indexName[1];
+                _file.Serial = uint.Parse(matchRet.Groups[1].Value);
+                if(matchRet.Groups.Count > 1) _file.Name = matchRet.Groups[1].Value;
                 _file.FileName = filename;
                 _mapIndexFiles.Add(_file.Serial, _file);
             }

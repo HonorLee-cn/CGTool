@@ -11,6 +11,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text.RegularExpressions;
 using UnityEngine;
 
 namespace CGTool
@@ -129,9 +130,9 @@ namespace CGTool
         private static Dictionary<int,string> _animeInfoVersionPrefex = new Dictionary<int, string>()
         {
             //龙之沙漏 之前版本前Info数据
-            {0,"AnimeInfo_"},
+            {0,@"AnimeInfo_\d+"},
             //龙之沙漏 版本Info数据
-            {1,"AnimeInfoEx_"}
+            {1,@"AnimeInfoEx_\d+"}
         };
         private static List<string> _animeInfoFilePaths = new List<string>();
 
@@ -139,9 +140,9 @@ namespace CGTool
         private static Dictionary<int,string> _animeDataVersionPrefex = new Dictionary<int, string>()
         {
             //龙之沙漏 之前版本前Data数据
-            {0,"Anime_"},
+            {0,@"Anime_\d+"},
             //龙之沙漏 版本Data数据
-            {1,"AnimeEx_"}
+            {1,@"AnimeEx_\d+"}
         };
         private static List<string> _animeDataFilePaths = new List<string>();
 
@@ -155,11 +156,11 @@ namespace CGTool
             {
                 foreach (FileInfo fileInfo in files)
                 {
-                    if (fileInfo.Name.StartsWith(_animeInfoVersionPrefex[i]))
+                    if (Regex.IsMatch(fileInfo.Name, _animeInfoVersionPrefex[i]))
                     {
                         _animeInfoFilePaths.Add(fileInfo.Name);
                     }
-                    if(fileInfo.Name.StartsWith(_animeDataVersionPrefex[i]))
+                    if(Regex.IsMatch(fileInfo.Name,_animeDataVersionPrefex[i]))
                     {
                         _animeDataFilePaths.Add(fileInfo.Name);
                     }
@@ -336,7 +337,7 @@ namespace CGTool
                         //标识位
                         int flag = BitConverter.ToInt16(dataFileReader.ReadBytes(2),0);
 
-                        if (animeData.Index == 110053) Debug.Log("FLAG---" + " " + k + "  " + flag);
+                        // if (animeData.Index == 110053) Debug.Log("FLAG---" + " " + k + "  " + flag);
 
                         if (flag>20000)
                         {
