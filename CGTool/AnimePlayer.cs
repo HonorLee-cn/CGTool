@@ -9,7 +9,6 @@
  */
 
 using System.Collections.Generic;
-using FT;
 using UnityEngine;
 using UnityEngine.UI;
 
