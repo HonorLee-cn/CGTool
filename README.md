@@ -108,7 +108,7 @@ Dictionary<int, GraphicData> MapGroundSerialDic =
 ```csharp
 /**
 * 动画播放器,用于播放CG动画,支持多动画队列播放
-* 1.4更新后已无需手动挂载SpriteRenderer、Image组件，程序会自动处理
+* 1.3更新后已无需手动挂载SpriteRenderer、Image组件，程序会自动处理
 * 只需将AnimePlayer挂载到任意GameObject上即可，可手动指定渲染方式是否以Image组件渲染
 *
 * 动画解析Anime类中包含以下多个枚举预设:
