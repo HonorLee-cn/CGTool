@@ -223,6 +223,7 @@ player.Stop();
 ## 4、更新日志
 ### v 1.4
 > `ADD` 加入Anime序列帧合批，挂载AnimePlayer后可手动设置是否开启合批(建议开启)
+
 ### v 1.3
 > `UPD` 优化AnimePlayer组件的挂载和使用方式
 > 
