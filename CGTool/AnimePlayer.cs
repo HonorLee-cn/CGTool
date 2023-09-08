@@ -9,6 +9,7 @@
  */
 
 using System.Collections.Generic;
+using FT;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -128,6 +129,11 @@ namespace CGTool
             //碰撞盒,仅当需要添加鼠标事件时使用
             _boxCollider2D = GetComponent<BoxCollider2D>();
             
+            if(_imageRenderer == null) _imageRenderer = gameObject.AddComponent<Image>();
+            if(_spriteRenderer == null) _spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
+            if(_rectTransform == null) _rectTransform = gameObject.AddComponent<RectTransform>();
+            // if(_boxCollider2D == null) _boxCollider2D = gameObject.AddComponent<BoxCollider2D>();
+            
         }
 
         private void Start()
@@ -207,7 +213,7 @@ namespace CGTool
          * @param Serial 动画序列号
          * @param Direction 动画方向
          * @param ActionType 动画动作
-         * @param Infinity 是否循环
+         * @param PlayType 播放类型
          * @param Speed 播放速度,以 1s 为基准,根据动画帧率计算实际播放周期时长
          * @param onFinishCallback 动画结束回调
          * @return AnimePlayer
@@ -267,6 +273,17 @@ namespace CGTool
                 _currentAnime.playType, _currentAnime.Speed, _currentAnime.onFinishCallback);
             _play(_currentAnime);
         }
+        public Anime.DirectionType DirectionType
+        {
+            get => _currentAnime?.Direction ?? Anime.DirectionType.NULL;
+            set
+            {
+                if (_currentAnime != null)
+                {
+                    changeDirection(value);
+                }
+            }
+        }
         
         //调整动画动作类型
         public void changeActionType(Anime.ActionType actionType)
@@ -275,6 +292,17 @@ namespace CGTool
             _currentAnime = CreateAnimeOption(_currentAnime.AnimeSerial, _currentAnime.Direction,actionType,
                 _currentAnime.playType, _currentAnime.Speed, _currentAnime.onFinishCallback);
             _play(_currentAnime);
+        }
+        public Anime.ActionType ActionType
+        {
+            get => _currentAnime?.actionType ?? Anime.ActionType.NULL;
+            set
+            {
+                if (_currentAnime != null)
+                {
+                    changeActionType(value);
+                }
+            }
         }
 
         //播放

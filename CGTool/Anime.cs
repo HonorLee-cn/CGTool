@@ -89,9 +89,10 @@ namespace CGTool
             {DirectionType.NorthWest,DirectionType.NULL,DirectionType.SouthEast},
             {DirectionType.West,DirectionType.SouthWest,DirectionType.South}
         };
-        //动作(未补全)
+        //动作
         public enum ActionType
         {
+            NULL=-1,
             Stand=0,
             Walk=1,
             BeforeRun=2,
@@ -108,7 +109,12 @@ namespace CGTool
             Happy=13,
             Angry=14,
             Sad=15,
-            Shock=16,
+            Shake=16,
+            Rock=17,
+            Scissors=18,
+            Paper=19,
+            Fishing=20,
+            
         }
         //动效
         public enum EffectType
