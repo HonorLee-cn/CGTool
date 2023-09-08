@@ -315,7 +315,6 @@ namespace CGTool
 
             if (isFrameBatch)
             {
-                Debug.Log("AnimePlayer:Batch");
                 Anime.BakeAnimeFrames(animeOption.AnimeDetail);
                 //获取动画帧数据
                 for (int i = 0; i < animeOption.AnimeDetail.AnimeFrameInfos.Length; i++)
