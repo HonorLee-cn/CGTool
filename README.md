@@ -14,6 +14,10 @@
 
 本解析库原始发布地址: [https://git.honorlee.me/HonorLee/CGTool](https://git.honorlee.me/HonorLee/CGTool)
 
+同步更新至Github: [https://github.com/HonorLee-cn/CGTool](https://github.com/HonorLee-cn/CGTool)
+
+如有任何问题请至Github提交Issues或联系作者
+
 ## 2、使用说明
 
 克隆当前仓库或下载zip包解压，将CGTool文件夹放置于Unity项目文件夹内引用
