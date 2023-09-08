@@ -49,6 +49,8 @@ namespace CGTool
         public int AudioIndex;
         //动效编号
         public Anime.EffectType Effect;
+        //GraphicInfo;
+        public GraphicInfoData GraphicInfo;
         //动画Sprite
         public Sprite AnimeSprite;
     }
@@ -215,11 +217,14 @@ namespace CGTool
             return null;
         }
 
-        //预处理动画图形合批,这个返回的是一个所有帧合并后的Texture2D
-        private static void prepareAnimeFrames(AnimeDetail animeDetail)
+        //预处理动画图形合批烘焙
+        public static void BakeAnimeFrames(AnimeDetail animeDetail)
         {
-            //动态合并Texture2D
+            if(animeDetail.AnimeTexture != null) return;
+            //所有帧的图形数据
             GraphicData[] graphicDatas = new GraphicData[animeDetail.FrameCount];
+            
+            //合并后的Texture2D尺寸
             uint textureWidth = 0;
             uint textureHeight = 0;
             
@@ -238,10 +243,10 @@ namespace CGTool
                 animeDetail.AnimeFrameInfos[i].Height = (int) graphicData.Height;
                 animeDetail.AnimeFrameInfos[i].OffsetX = (int) graphicInfoData.OffsetX;
                 animeDetail.AnimeFrameInfos[i].OffsetY = (int) graphicInfoData.OffsetY;
+                animeDetail.AnimeFrameInfos[i].GraphicInfo = graphicInfoData;
             }
             //合并图档
-            Texture2D texture2dMix = new Texture2D((int) textureWidth, (int) textureHeight, TextureFormat.RGBA32, false,
-                true);
+            Texture2D texture2dMix = new Texture2D((int) textureWidth, (int) textureHeight, TextureFormat.RGBA4444, false,false);
             Color32 transparentColor = new Color32(0, 0, 0, 0);
             Color32[] transparentColors = new Color32[texture2dMix.width * texture2dMix.height];
             for (var i = 0; i < transparentColors.Length; i++)
@@ -249,6 +254,7 @@ namespace CGTool
                 transparentColors[i] = transparentColor;
             }
             texture2dMix.SetPixels32(transparentColors,0);
+            
             int offsetX = 0;
             for (var i = 0; i < animeDetail.FrameCount; i++)
             {

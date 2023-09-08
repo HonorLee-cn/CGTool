@@ -81,6 +81,7 @@ namespace CGTool
         
         //绑定渲染对象
         [SerializeField,Header("Image渲染")] public bool isRenderByImage = false;
+        [SerializeField,Header("序列帧合批")] public bool isFrameBatch = false;
         private SpriteRenderer _spriteRenderer;
         private Image _imageRenderer;
         private int _paletIndex = 0;
@@ -312,33 +313,53 @@ namespace CGTool
             
             AnimeFrame[] frames = new AnimeFrame[animeOption.AnimeDetail.FrameCount];
 
-            //获取动画帧数据
-            for (int i = 0; i < animeOption.AnimeDetail.AnimeFrameInfos.Length; i++)
+            if (isFrameBatch)
             {
-                AnimeFrameInfo animeFrameInfo = animeOption.AnimeDetail.AnimeFrameInfos[i];
-                GraphicInfoData graphicInfoData = GraphicInfo.GetGraphicInfoDataByIndex(animeOption.AnimeDetail.Version, animeOption.AnimeDetail.AnimeFrameInfos[i].GraphicIndex);
-                if (graphicInfoData == null)
+                Debug.Log("AnimePlayer:Batch");
+                Anime.BakeAnimeFrames(animeOption.AnimeDetail);
+                //获取动画帧数据
+                for (int i = 0; i < animeOption.AnimeDetail.AnimeFrameInfos.Length; i++)
                 {
-                    Debug.Log("GraphicInfo Version:" + animeOption.AnimeDetail.Version + " Index:" +
-                              animeOption.AnimeDetail.AnimeFrameInfos[i] + " is null");
-                    continue;
+                    if(animeOption.AnimeDetail.AnimeFrameInfos[i].AnimeSprite == null) continue;
+                    //创建帧数据
+                    frames[i] = new AnimeFrame();
+                    frames[i].Index = i;
+                    frames[i].GraphicInfo = animeOption.AnimeDetail.AnimeFrameInfos[i].GraphicInfo;
+                    frames[i].Sprite = animeOption.AnimeDetail.AnimeFrameInfos[i].AnimeSprite;
+                    frames[i].AnimeFrameInfo = animeOption.AnimeDetail.AnimeFrameInfos[i];
                 }
-
-                GraphicData graphicData = Graphic.GetGraphicData(graphicInfoData, _paletIndex);
-                if (graphicData == null)
-                {
-                    Debug.Log("GraphicData Version:" + animeOption.AnimeDetail.Version + " Index:" +
-                              animeOption.AnimeDetail.AnimeFrameInfos[i] + " is null");
-                    continue;
-                }
-                
-                //创建帧数据
-                frames[i] = new AnimeFrame();
-                frames[i].Index = i;
-                frames[i].GraphicInfo = graphicInfoData;
-                frames[i].Sprite = graphicData.Sprite;
-                frames[i].AnimeFrameInfo = animeFrameInfo;
             }
+            else
+            {
+                //获取动画帧数据
+                for (int i = 0; i < animeOption.AnimeDetail.AnimeFrameInfos.Length; i++)
+                {
+                    AnimeFrameInfo animeFrameInfo = animeOption.AnimeDetail.AnimeFrameInfos[i];
+                    GraphicInfoData graphicInfoData = GraphicInfo.GetGraphicInfoDataByIndex(animeOption.AnimeDetail.Version, animeOption.AnimeDetail.AnimeFrameInfos[i].GraphicIndex);
+                    if (graphicInfoData == null)
+                    {
+                        Debug.Log("GraphicInfo Version:" + animeOption.AnimeDetail.Version + " Index:" +
+                                  animeOption.AnimeDetail.AnimeFrameInfos[i] + " is null");
+                        continue;
+                    }
+
+                    GraphicData graphicData = Graphic.GetGraphicData(graphicInfoData, _paletIndex);
+                    if (graphicData == null)
+                    {
+                        Debug.Log("GraphicData Version:" + animeOption.AnimeDetail.Version + " Index:" +
+                                  animeOption.AnimeDetail.AnimeFrameInfos[i] + " is null");
+                        continue;
+                    }
+                
+                    //创建帧数据
+                    frames[i] = new AnimeFrame();
+                    frames[i].Index = i;
+                    frames[i].GraphicInfo = graphicInfoData;
+                    frames[i].Sprite = graphicData.Sprite;
+                    frames[i].AnimeFrameInfo = animeFrameInfo;
+                }
+            }
+            
 
             _currentAnime = animeOption;
             _frames = frames;
