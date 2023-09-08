@@ -75,6 +75,13 @@ GraphicData graphicData = Graphic.GetGraphicData(graphicInfoData);
 SpriteRenderer(Image).sprite = graphicData.Sprite;
 ```
 
+### 获取地图数据
+```csharp
+// 通过编号获取地图数据,地图数据中包含地面及地上物件数据以及寻路用的二维数组
+// 可自行阅读源码查询相关属性成员和使用方式
+Map.MapInfo mapInfo = Map.GetMap(uint Serial);
+```
+
 ### 获取地图地面图档合批图档数据
 ```csharp
 /**
