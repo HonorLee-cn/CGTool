@@ -127,7 +127,7 @@ namespace CGTool
             _spriteRenderer = GetComponent<SpriteRenderer>();
             _rectTransform = GetComponent<RectTransform>();
             //碰撞盒,仅当需要添加鼠标事件时使用
-            _boxCollider2D = GetComponent<BoxCollider2D>();
+            // _boxCollider2D = GetComponent<BoxCollider2D>();
             
             if(_imageRenderer == null) _imageRenderer = gameObject.AddComponent<Image>();
             if(_spriteRenderer == null) _spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
@@ -315,16 +315,17 @@ namespace CGTool
 
             if (isFrameBatch)
             {
-                Anime.BakeAnimeFrames(animeOption.AnimeDetail);
+                Anime.BakeAnimeFrames(animeOption.AnimeDetail, _paletIndex);
                 //获取动画帧数据
                 for (int i = 0; i < animeOption.AnimeDetail.AnimeFrameInfos.Length; i++)
                 {
-                    if(animeOption.AnimeDetail.AnimeFrameInfos[i].AnimeSprite == null) continue;
+                    if(!animeOption.AnimeDetail.AnimeFrameInfos[i].AnimeSprites.ContainsKey(_paletIndex)) continue;
+                    if(animeOption.AnimeDetail.AnimeFrameInfos[i].AnimeSprites[_paletIndex] == null) continue;
                     //创建帧数据
                     frames[i] = new AnimeFrame();
                     frames[i].Index = i;
                     frames[i].GraphicInfo = animeOption.AnimeDetail.AnimeFrameInfos[i].GraphicInfo;
-                    frames[i].Sprite = animeOption.AnimeDetail.AnimeFrameInfos[i].AnimeSprite;
+                    frames[i].Sprite = animeOption.AnimeDetail.AnimeFrameInfos[i].AnimeSprites[_paletIndex];
                     frames[i].AnimeFrameInfo = animeOption.AnimeDetail.AnimeFrameInfos[i];
                 }
             }

@@ -52,7 +52,7 @@ namespace CGTool
         //GraphicInfo;
         public GraphicInfoData GraphicInfo;
         //动画Sprite
-        public Sprite AnimeSprite;
+        public Dictionary<int,Sprite> AnimeSprites = new Dictionary<int, Sprite>();
     }
 
     //动画数据
@@ -64,7 +64,8 @@ namespace CGTool
         public int ActionType;
         public uint CycleTime;
         public uint FrameCount;
-        public Texture2D AnimeTexture;
+        public Dictionary<int,Texture2D> AnimeTextures = new Dictionary<int, Texture2D>();
+        // public Texture2D AnimeTexture;
         public AnimeFrameInfo[] AnimeFrameInfos;
         // public byte[] unknown;
     }
@@ -218,9 +219,9 @@ namespace CGTool
         }
 
         //预处理动画图形合批烘焙
-        public static void BakeAnimeFrames(AnimeDetail animeDetail)
+        public static void BakeAnimeFrames(AnimeDetail animeDetail,int paletIndex = 0)
         {
-            if(animeDetail.AnimeTexture != null) return;
+            if(animeDetail.AnimeTextures.ContainsKey(paletIndex)) return;
             //所有帧的图形数据
             GraphicData[] graphicDatas = new GraphicData[animeDetail.FrameCount];
             
@@ -234,7 +235,7 @@ namespace CGTool
                 //载入图档
                 GraphicInfoData graphicInfoData = GraphicInfo.GetGraphicInfoDataByIndex(animeDetail.Version,animeDetail.AnimeFrameInfos[i].GraphicIndex);
                 if (graphicInfoData == null) continue;
-                GraphicData graphicData = Graphic.GetGraphicData(graphicInfoData);
+                GraphicData graphicData = Graphic.GetGraphicData(graphicInfoData, paletIndex);
                 if(graphicData == null) continue;
                 graphicDatas[i] = graphicData;
                 if(graphicData.Height > textureHeight) textureHeight = graphicData.Height;
@@ -267,7 +268,7 @@ namespace CGTool
             }
             texture2dMix.Apply();
             
-            animeDetail.AnimeTexture = texture2dMix;
+            animeDetail.AnimeTextures.Add(paletIndex,texture2dMix);
             
             //创建动画每帧Sprite
             offsetX = 0;
@@ -282,7 +283,7 @@ namespace CGTool
                         animeDetail.AnimeFrameInfos[l].Width, animeDetail.AnimeFrameInfos[l].Height),
                     pivot, 1, 1, SpriteMeshType.FullRect);
                 offsetX += animeDetail.AnimeFrameInfos[l].Width;
-                animeFrameInfo.AnimeSprite = sprite;
+                animeFrameInfo.AnimeSprites.Add(paletIndex, sprite);
             }
             
         }
