@@ -248,6 +248,7 @@ namespace CGTool
             }
             //合并图档
             Texture2D texture2dMix = new Texture2D((int) textureWidth, (int) textureHeight, TextureFormat.RGBA4444, false,false);
+            texture2dMix.filterMode = FilterMode.Point;
             Color32 transparentColor = new Color32(0, 0, 0, 0);
             Color32[] transparentColors = new Color32[texture2dMix.width * texture2dMix.height];
             for (var i = 0; i < transparentColors.Length; i++)
