@@ -42,7 +42,7 @@ namespace CGTool
                 Dictionary<int,string> map = type == Type.BGM ? _bgmMap : _effectMap;
                 if(map.TryGetValue(id, out string audioPath))
                 {
-                    audioClip = Resources.Load<AudioClip>(audioPath);
+                    audioClip = UnityEngine.Resources.Load<AudioClip>(audioPath);
                     return audioClip;
                 }
                 else

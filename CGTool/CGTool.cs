@@ -15,15 +15,21 @@ namespace CGTool
     public static class CGTool
     {
         //Bin基础目录
-        public readonly static string BaseFolder = System.Environment.CurrentDirectory + "/bin";
+        public static string BaseFolder = System.Environment.CurrentDirectory + "/bin";
         //Palet调色板目录
-        public readonly static string PaletFolder = BaseFolder + "/pal";
+        public static string PaletFolder = BaseFolder + "/pal";
         //Map地图文件目录
-        public readonly static string MapFolder = BaseFolder + "/map";
+        public static string MapFolder = BaseFolder + "/map";
 
         //初始化CGTool
-        public static void Init()
+        public static void Init(string binPath = null)
         {
+            if (!string.IsNullOrEmpty(binPath))
+            {
+                BaseFolder = binPath;
+                PaletFolder = BaseFolder + "/pal";
+                MapFolder = BaseFolder + "/map";
+            }
             //初始化加载并缓存 0-15 调色板文件
             for (int i = 0; i < 16; i++) Palet.GetPalet(i);
             

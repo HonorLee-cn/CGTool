@@ -82,6 +82,7 @@ namespace CGTool
         //绑定渲染对象
         [SerializeField,Header("Image渲染")] public bool isRenderByImage = false;
         [SerializeField,Header("序列帧合批")] public bool isFrameBatch = false;
+        [Header("序列帧Texture")] public Texture2D frameTexture;
         private SpriteRenderer _spriteRenderer;
         private Image _imageRenderer;
         private int _paletIndex = 0;
@@ -384,6 +385,11 @@ namespace CGTool
             gameObject.SetActive(false);
         }
 
+        public void Pause()
+        {
+            isPlayable = false;
+        }
+
         //修改播放类型---重复方法--考虑删掉
         public void ChangePlayType(Anime.PlayType playType)
         {
@@ -520,6 +526,7 @@ namespace CGTool
                 _rectTransform.pivot = new Vector2(0.5f,0f);
                 _rectTransform.localPosition = Vector3.zero;
             }
+            frameTexture = _frames[_currentFrame].Sprite.texture;
             
             // Vector2 offset = Vector2.zero;
             // offset.x += -(_frames[_currentFrame].GraphicInfo.OffsetX * 1f) / _frames[_currentFrame].GraphicInfo.Width;

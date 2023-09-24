@@ -239,7 +239,7 @@ namespace CGTool
                 if(graphicData == null) continue;
                 graphicDatas[i] = graphicData;
                 if(graphicData.Height > textureHeight) textureHeight = graphicData.Height;
-                textureWidth += graphicData.Width;
+                textureWidth += graphicData.Width + 5;
                 animeDetail.AnimeFrameInfos[i].Width = (int) graphicData.Width;
                 animeDetail.AnimeFrameInfos[i].Height = (int) graphicData.Height;
                 animeDetail.AnimeFrameInfos[i].OffsetX = (int) graphicInfoData.OffsetX;
@@ -264,7 +264,7 @@ namespace CGTool
                 texture2dMix.SetPixels32((int) offsetX, 0, (int) graphicData.Width,
                     (int) graphicData.Height,
                     graphicData.Sprite.texture.GetPixels32());
-                offsetX += (int) graphicData.Width;
+                offsetX += (int) graphicData.Width + 5;
             }
             texture2dMix.Apply();
             
@@ -282,7 +282,7 @@ namespace CGTool
                 Sprite sprite = Sprite.Create(texture2dMix, new Rect(offsetX, 0,
                         animeDetail.AnimeFrameInfos[l].Width, animeDetail.AnimeFrameInfos[l].Height),
                     pivot, 1, 1, SpriteMeshType.FullRect);
-                offsetX += animeDetail.AnimeFrameInfos[l].Width;
+                offsetX += animeDetail.AnimeFrameInfos[l].Width + 5;
                 animeFrameInfo.AnimeSprites.Add(paletIndex, sprite);
             }
             

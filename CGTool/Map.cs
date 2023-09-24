@@ -13,6 +13,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using UnityEngine;
 
 namespace CGTool
 {
@@ -122,27 +123,70 @@ namespace CGTool
             MapInfo mapInfo = new MapInfo();
             mapInfo.Serial = serial;
 
+            bool isClientMapFile = false;
+
             //地图文件头
-            byte[] mapHeader = mapFileReader.ReadBytes( 8);
-            //地图名称
-            byte[] mapNameBytes = mapFileReader.ReadBytes(32);
-            string[] mapHead = System.Text.Encoding.GetEncoding("GBK").GetString(mapNameBytes).Split('|');
-            mapInfo.Name = mapHead[0];
-            
-            // 调色板
-            if (mapHead.Length>1){
-                if(mapHead[1] != null || mapHead[1] != "") mapInfo.Palet = int.Parse(mapHead[1]);
+            byte[] mapHeader = mapFileReader.ReadBytes( 6);
+            if(mapHeader[0]==0x4C && mapHeader[1]==0x53 && mapHeader[2]==0x32 && mapHeader[3]==0x4D && mapHeader[4]==0x41 && mapHeader[5]==0x50){
+                isClientMapFile = false;
+                Debug.Log("地图文件头: 服务端地图");
+            }else if (mapHeader[0]==0x4D && mapHeader[1]==0x41 && mapHeader[2]==0x50){
+                isClientMapFile = true;
+                Debug.Log("地图文件头: 客户端地图");
+            }
+            else
+            {
+                Debug.Log("地图文件头错误: " + _mapIndexFiles[serial].FileName);
+                return null;
             }
 
-
-            //读取地图宽度
-            byte[] bytes = mapFileReader.ReadBytes(2);
-            Array.Reverse(bytes);
-            mapInfo.Width = BitConverter.ToUInt16(bytes,0);
-            //读取地图高度
-            bytes = mapFileReader.ReadBytes(2);
-            Array.Reverse(bytes);
-            mapInfo.Height = BitConverter.ToUInt16(bytes,0);
+            byte[] bytes;
+            if (isClientMapFile)
+            {
+                // 无用信息
+                mapFileReader.ReadBytes(6);
+                //读取地图宽度
+                bytes = mapFileReader.ReadBytes(4);
+                mapInfo.Width = BitConverter.ToUInt16(bytes,0);
+                //读取地图高度
+                bytes = mapFileReader.ReadBytes(4);
+                mapInfo.Height = BitConverter.ToUInt16(bytes,0);
+                if (MapExtra.ClientMapExtraDatas.ContainsKey(serial))
+                {
+                    mapInfo.Name = MapExtra.ClientMapExtraDatas[serial].Name;
+                    mapInfo.Palet = MapExtra.ClientMapExtraDatas[serial].Palet;
+                }
+                else
+                {
+                    mapInfo.Name = "未知领域";
+                    mapInfo.Palet = -1;
+                }
+            }
+            else
+            {
+                // 无用信息
+                mapFileReader.ReadBytes(2);
+                //地图名称
+                byte[] mapNameBytes = mapFileReader.ReadBytes(32);
+                string[] mapHead = System.Text.Encoding.GetEncoding("GBK").GetString(mapNameBytes).Split('|');
+                mapInfo.Name = mapHead[0];
+            
+                // 调色板
+                if (mapHead.Length>1){
+                    if(mapHead[1] != null || mapHead[1] != "") mapInfo.Palet = int.Parse(mapHead[1]);
+                }
+                
+                //读取地图宽度
+                bytes = mapFileReader.ReadBytes(2);
+                Array.Reverse(bytes);
+                mapInfo.Width = BitConverter.ToUInt16(bytes,0);
+                //读取地图高度
+                bytes = mapFileReader.ReadBytes(2);
+                Array.Reverse(bytes);
+                mapInfo.Height = BitConverter.ToUInt16(bytes,0);
+            }
+            
+            Debug.Log("地图宽度: " + mapInfo.Width + " 地图高度: " + mapInfo.Height);
 
             byte[] mapBytes = mapFileReader.ReadBytes((int) (mapInfo.Width * mapInfo.Height * 2));
             byte[] mapCoverBytes = mapFileReader.ReadBytes((int) (mapInfo.Width * mapInfo.Height * 2));
@@ -168,7 +212,7 @@ namespace CGTool
                 //地面数据
                 MapBlockData mapTile = null;
                 bytes = mapReader.ReadBytes(2);
-                Array.Reverse(bytes);
+                if(!isClientMapFile) Array.Reverse(bytes);
                 uint mapGraphicSerial = BitConverter.ToUInt16(bytes,0);
                 int Version = 0;
                 if (mapGraphicSerial > 20000)
@@ -187,7 +231,7 @@ namespace CGTool
                 
                 MapBlockData mapCoverTile = null;
                 bytes = mapCoverReader.ReadBytes(2);
-                Array.Reverse(bytes);
+                if(!isClientMapFile) Array.Reverse(bytes);
                 uint mapCoverGraphicSerial = BitConverter.ToUInt16(bytes,0);
                 Version = 0;
                 if (mapCoverGraphicSerial > 30000 || mapCoverGraphicSerial==25290)

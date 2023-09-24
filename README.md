@@ -216,11 +216,20 @@ player.Stop();
 > * `Anime` 动画数据解析
 > * `AudioTool` 音频索引及加载
 > * `AnimePlayer` 动画播放器挂载组件
-> * `Map` 服务端地图数据解析
+> * `Map` 服务端/客户端 图数据解析
 
 
 
 ## 4、更新日志
+### v 1.6
+> `ADD` 加入<font color="red">客户端</font>地图读取支持，同时附加了客户端地图文件缺失的名字和调色版映射表
+>
+> `UPD` Anime合批处理图形之间增加间隔,避免出现像素黏连
+>
+> `UPD` AnimePlayer挂载件预留FrameTexture属性可在Editor中查看合批的图像
+>
+> `UPD` CGTool入口调整，可指定bin目录位置
+
 ### v 1.5
 > `UPD` Anime序列帧合批忘了考虑不同调色板的问题，现已增加相关处理
 
