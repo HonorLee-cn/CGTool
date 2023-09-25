@@ -8,6 +8,7 @@
  * Graphic.cs 图档解析类
  */
 
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -36,6 +37,10 @@ namespace CGTool
         public int OffsetX;
         //图档偏移Y
         public int OffsetY;
+        //图档合批偏移X
+        public int BatchOffsetX;
+        //图档合批偏移Y
+        public int BatchOffsetY;
         //Palet调色板Index
         public int PaletIndex;
         //图档Sprite
@@ -218,11 +223,7 @@ namespace CGTool
                     texture2D = new Texture2D(2048, height, TextureFormat.RGBA4444, false, true);
                     texture2D.filterMode = FilterMode.Point;
                     //默认填充全透明
-                    Color32[] colors = new Color32[2048 * height];
-                    for (int j = 0; j < colors.Length; j++)
-                    {
-                        colors[j] = new Color32(0,0,0,0);
-                    }
+                    Color32[] colors = Enumerable.Repeat(new Color32(0, 0, 0, 0), 2048 * height).ToArray();
                     texture2D.SetPixels32(colors);
                 }
                 
@@ -249,8 +250,9 @@ namespace CGTool
                 graphicData.OffsetX = graphicInfoData.OffsetX;
                 graphicData.OffsetY = graphicInfoData.OffsetY;
                 graphicData.PaletIndex = PaletIndex;
-                
-                
+                graphicData.BatchOffsetX = x;
+                graphicData.BatchOffsetY = y;
+
                 graphicDatas.Add(graphicData);
             }
             
@@ -280,6 +282,133 @@ namespace CGTool
 
             return graphicDataDic;
         }
+        
+        //预备地图物件缓存
+        partial class TextureData
+        {
+            public int MaxHeight;
+            public int MaxWidth;
+            public List<GraphicData> GraphicDatas = new List<GraphicData>();
+            public List<GraphicInfoData> GraphicInfoDatas = new List<GraphicInfoData>();
+        }
+        public static Dictionary<int, GraphicData> PrepareMapObjectTexture(int MapID, int PaletIndex,
+            List<GraphicInfoData> objectInfos)
+        {
+            //如果已经缓存过,则直接返回
+            // if(_mapSpriteMap.ContainsKey(MapID) && _mapSpriteMap[MapID].ContainsKey(PaletIndex)) return _mapSpriteMap[MapID][PaletIndex];
+            //如果没有缓存过,则创建缓存
+            // if(!_mapSpriteMap.ContainsKey(MapID)) _mapSpriteMap.Add(MapID,new Dictionary<int, Dictionary<int, GraphicData>>());
+            
+            // 单个Texture最大尺寸
+            int maxWidth = 4096;
+            int maxHeight = 4096;
+            
+            List<TextureData> textureDatas = new List<TextureData>();
+            Dictionary<int, GraphicData> graphicDataDic = new Dictionary<int, GraphicData>();
+            // _mapSpriteMap[MapID].Add(PaletIndex, graphicDataDic);
+
+            // 根据objectInfos的内,GraphicInfoData的Width,Height进行排序,优先排序Width,使图档从小到大排列
+            objectInfos = objectInfos.OrderBy(obj => obj.Width).ThenBy(obj => obj.Height).ToList();
+
+            int offsetX = 0;    // X轴偏移量
+            int offsetY = 0;    // Y轴偏移量
+            int maxRowHeight = 0;   // 当前行最大高度
+            
+            TextureData textureData = new TextureData();
+            
+            for (var i = 0; i < objectInfos.Count; i++)
+            {
+                GraphicInfoData graphicInfoData = objectInfos[i];
+                // 如果宽度超过4096,则换行
+                if((graphicInfoData.Width + offsetX) > maxWidth)
+                {
+                    offsetX = 0;
+                    offsetY = offsetY + maxRowHeight + 5;
+                    maxRowHeight = 0;
+                }
+                // 如果高度超过2048,则生成新的Texture2D
+                if ((graphicInfoData.Height + offsetY) > maxHeight)
+                {
+                    offsetX = 0;
+                    offsetY = 0;
+                    maxRowHeight = 0;
+                    textureDatas.Add(textureData);
+                    textureData = new TextureData();
+                }
+
+                GraphicData graphicData = new GraphicData();
+                //写入数据
+                graphicData.Version = graphicInfoData.Version;
+                graphicData.Index = graphicInfoData.Index;
+                graphicData.MapSerial = graphicInfoData.Serial;
+                graphicData.Width = graphicInfoData.Width;
+                graphicData.Height = graphicInfoData.Height;
+                graphicData.OffsetX = graphicInfoData.OffsetX;
+                graphicData.OffsetY = graphicInfoData.OffsetY;
+                graphicData.PaletIndex = PaletIndex;
+                graphicData.BatchOffsetX = offsetX;
+                graphicData.BatchOffsetY = offsetY;
+
+                // graphicDatas.Add(graphicData);
+                
+                textureData.GraphicDatas.Add(graphicData);
+                textureData.GraphicInfoDatas.Add(graphicInfoData);
+                
+                
+                maxRowHeight = Mathf.Max(maxRowHeight, (int) graphicData.Height);
+                textureData.MaxHeight = Mathf.Max(textureData.MaxHeight, offsetY + maxRowHeight);
+                textureData.MaxWidth = Mathf.Max(textureData.MaxWidth, offsetX + (int) graphicData.Width);
+                offsetX += (int) graphicData.Width + 5;
+            }
+            
+            //最后一次合并
+            if (textureData.GraphicDatas.Count > 0) textureDatas.Add(textureData);
+            
+            //合并Texture2D
+            for (var i = 0; i < textureDatas.Count; i++)
+            {
+                TextureData textureDataPiece = textureDatas[i];
+                // Debug.Log($"合并第{i}个Texture2D,最大高度:{textureDataPiece.MaxHeight},图像数量:{textureDataPiece.GraphicDatas.Count}");
+                Color32[] colors = Enumerable.Repeat(new Color32(0,0,0,0), textureDataPiece.MaxWidth * textureDataPiece.MaxHeight).ToArray();
+                Texture2D texture2DPiece = new Texture2D(textureDataPiece.MaxWidth, textureDataPiece.MaxHeight, TextureFormat.RGBA4444, false, false);
+                texture2DPiece.filterMode = FilterMode.Point;
+                texture2DPiece.SetPixels32(colors);
+                for (var n = 0; n < textureDataPiece.GraphicDatas.Count; n++)
+                {
+                    GraphicData graphicData = textureDataPiece.GraphicDatas[n];
+                    GraphicInfoData graphicInfoData = textureDataPiece.GraphicInfoDatas[n];
+                    
+                    //设置图像数据
+                    List<Color32> pixels = UnpackGraphic(graphicInfoData, PaletIndex);
+                    graphicData.PrimaryColor = pixels.Last();
+                    pixels.RemoveAt(pixels.Count - 1);
+                
+                    texture2DPiece.SetPixels32(graphicData.BatchOffsetX, graphicData.BatchOffsetY, (int) graphicInfoData.Width, (int) graphicInfoData.Height,
+                        pixels.ToArray());
+                }
+                texture2DPiece.Apply();
+                Combine(texture2DPiece, textureDataPiece.GraphicDatas);
+            }
+
+            void Combine(Texture2D texture2D,List<GraphicData> graphicDatas)
+            {
+                for (var i = 0; i < graphicDatas.Count; i++)
+                {
+                    GraphicData graphicDataPiece = graphicDatas[i];
+                    //直接通过Texture2D做偏移,并转为Sprite的偏移量
+                    Vector2 offset = new Vector2(0f, 1f);
+                    offset.x += -(graphicDataPiece.OffsetX * 1f) / graphicDataPiece.Width;
+                    offset.y -= (-graphicDataPiece.OffsetY * 1f) / graphicDataPiece.Height;
+
+                    Sprite sprite = Sprite.Create(texture2D, new Rect(graphicDataPiece.BatchOffsetX, graphicDataPiece.BatchOffsetY, (int)graphicDataPiece.Width, (int)graphicDataPiece.Height),offset, 1, 1, SpriteMeshType.FullRect);
+                    graphicDataPiece.Sprite = sprite;
+                    graphicDataDic.Add((int) graphicDataPiece.MapSerial, graphicDataPiece);
+                }
+            }
+
+            return graphicDataDic;
+        }
+        
         private static List<Color32> UnpackGraphic(GraphicInfoData graphicInfoData,int PaletIndex){
             List<Color32> pixels = new List<Color32>();
             //获取调色板

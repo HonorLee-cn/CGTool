@@ -301,7 +301,7 @@ namespace CGTool
                     //在物件South+1位置,到x+East位置,补正为-48*x
                     if (!ObjectTile.GraphicInfo.AsGround)
                     {
-                        for(int i = x;i<(x+ObjectTile.GraphicInfo.East-1);i++)
+                        for(int i = x;i<(x+ObjectTile.GraphicInfo.East);i++)
                         {
                             int fix = 1;
                             int oy = y - 1;
@@ -327,17 +327,14 @@ namespace CGTool
                     }
 
 
-                    //如果物件占地范围大于1x1,则需要处理遮挡
-                    if (ObjectTile.GraphicInfo.East > 1 || ObjectTile.GraphicInfo.South > 1)
+                    //如果物件占地范围大于1x1,则需要处理行走限制
+                    if ((ObjectTile.GraphicInfo.East > 1 || ObjectTile.GraphicInfo.South > 1) && ObjectTile.GraphicInfo.Blocked)
                     {
                         //取物件占地中间点位置
                         // objectTileZIndex = (x + ObjectTile.GraphicInfo.East / 2 + (y + ObjectTile.GraphicInfo.South / 2) * mapInfo.Width) * FixZIndex;
                         // ObjectTile.ObjectZIndex = objectTileZIndex;
                         //取物件左上角位置Z轴复写默认Z轴
                         // ObjectTile.ObjectZIndex = (x + (y + ObjectTile.GraphicInfo.South) * mapInfo.Width) * FixZIndex;
-                        
-                        
-
                         for (int i = x; i < (x + ObjectTile.GraphicInfo.East); i++)
                         {
                             for (int j = y; j < (y+ ObjectTile.GraphicInfo.South); j++)
@@ -358,6 +355,7 @@ namespace CGTool
             mapInfo.MapNodes = nodes;
             mapInfo.FixPlayerZs = fixPlayerZs;
             _cache[serial] = mapInfo;
+            
             // CGTool.Logger.Write("地图解析完成时间:" + DateTime.Now);
             return mapInfo;
         }

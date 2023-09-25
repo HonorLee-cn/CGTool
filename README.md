@@ -18,7 +18,29 @@
 
 如有任何问题请至Github提交Issues或联系作者
 
-## 2、使用说明
+![预览](Preview/Preview.png)
+
+## 2、功能支持
+> 当前版本目前仅支持 魔力宝贝3.7-龙之沙漏 及以下版本的图档解析
+> 
+> 目前版本支持以下功能：
+> 
+> * `GraphicInfo` [图档索引解析](#获取图档索引数据)
+> * `Graphic` [图档数据解析](#获取指定索引图档数据)
+> * `Palet` 调色板数据解析
+> * `Map` [服务端/客户端 图数据解析](#获取地图数据)
+> * `AudioTool` [音频索引及加载](#获取音频)
+> * `AnimeInfo` 动画索引解析
+> * `Anime` 动画数据解析
+> * `AnimePlayer` [动画播放器挂载组件](#动画播放) 
+>   * `AnimePlayer` 动画关键帧(攻击/攻击完成)事件回调
+>   * `AnimePlayer` 音频帧事件回调
+
+![动画效果](Preview/AnimePlayer.png)
+![动画效果](Preview/AnimeSupport.gif)
+
+
+## 3、使用说明
 
 克隆当前仓库或下载zip包解压，将CGTool文件夹放置于Unity项目文件夹内引用
 
@@ -45,7 +67,8 @@ CGTool.CGTool.Init();
 CGTool初始化时，会自动对相关索引Info文件进行解析，请根据实际所采用版本情况，对脚本代码中解析相关的文件名称进行修改调整
 
 
-### 获取图档索引数据(图档基本索引数据属性信息)
+### 获取图档索引数据
+(图档基本索引数据属性信息)
 ```csharp
 // 通过编号获取图档,无需版本号(推荐方法)
 GraphicInfo.GetGraphicInfoDataBySerial(uint Serial);
@@ -60,7 +83,8 @@ GraphicInfo.GetGraphicInfoDataByMapSerial(int Version, uint MapSerial);
 GraphicInfo.GetGraphicInfoDataByIndex(int Version, uint Index);
 ```
 
-### 获取指定索引图档数据(图档实际数据,包含图像Sprite资源)
+### 获取指定索引图档数据
+(图档实际数据,包含图像Sprite资源)
 ```csharp
 // 通过图档索引编号获取GraphicData数据
 Graphic.GetGraphicData(GraphicInfoData graphicInfoData,int PaletIndex=0);
@@ -86,25 +110,48 @@ SpriteRenderer(Image).sprite = graphicData.Sprite;
 Map.MapInfo mapInfo = Map.GetMap(uint Serial);
 ```
 
-### 获取地图地面图档合批图档数据
+### 获取地图地面/地图物件图档合批数据
 ```csharp
 /**
- * 针对地面数据将地面图档自动进行拼合成一个或多个2048*2048尺寸Texture2D
- * 并将拼合后的Texture2D数据拆分为对应的Sprite资源
- * 这样可以大幅降低地面图档的内存占用和Drawcall数量,提高渲染的动态合批性能
+ * * 针对地面数据将地面图档自动进行拼合成一个或多个2048*2048尺寸Texture2D
+ * * 针对地图物件(建筑等)拼合成一个或多个不大于4096*4096尺寸Texture2D
+ * 拼合后的Texture2D数据拆分为对应的Sprite资源
+ * 这样可以大幅降低地图的内存占用和Drawcall数量,提高渲染的动态合批性能
  * 另:
  * 代码中暂时禁用了已合并地面Texture2D的缓存功能,如需使用请取消相关代码注释或自行修改
- * 由于4.0后地图模式变动,所以这个方法可能不适用于4.0后的地图
+ * 由于4.0后地图模式变动,部分地图图档过大,所以这个方法可能不适用于4.0后的地图
  */
+
+// 地面合批
 Dictionary<int, GraphicData> MapGroundSerialDic =
-    Graphic.PrepareMapGroundTexture(
+    Graphic.PrepareMapGroundTexture(    // <= 合并地面图形
         int MapID,
         int PaletIndex,
         List<GraphicInfoData> graphicInfoDataList
-    ); 
+    );
+
+// 物件合批
+Dictionary<int, GraphicData> MapObjectSerialDic =
+    Graphic.PrepareMapObjectTexture(    // <= 合并物件图形
+        int MapID,
+        int PaletIndex,
+        List<GraphicInfoData> graphicInfoDataList
+    );
+```
+![地面合并效果](Preview/MapGroundMix.png)
+![物件合并效果](Preview/MapObjectMix.png)
+![资源合并后效果](Preview/batches.png)
+
+### 获取音频
+```csharp
+//获取背景音乐
+AudioClip clip = AudioTool.GetAudio(AudioTool.Type.BGM,int serial);
+
+//获取音效音频
+AudioClip clip = AudioTool.GetAudio(AudioTool.Type.EFFECT,int serial);
 ```
 
-### 获取并播放动画数据
+### 动画播放
 ```csharp
 /**
 * 动画播放器,用于播放CG动画,支持多动画队列播放
@@ -121,6 +168,7 @@ Dictionary<int, GraphicData> MapGroundSerialDic =
 *
 * 当动画播放完成后会自动调用onFinishCallback回调函数
 * 另外可指定onActionListener和onAudioListener监听动画动作帧和音频帧相关判定
+*
 * 目前已知的动作帧有:
 * 击中 Hit (未结束攻击动作,如小石像、黄蜂、绿螳螂等单次攻击动作中有多次击中效果)
 * 伤害结算 HitOver
@@ -133,7 +181,7 @@ AnimePlayer player = GetComponent<AnimePlayer>();
 * @param Serial     动画序列号
 * @param Direction  动画方向
 * @param ActionType 动画动作
-* @param PlayType   播放类型
+* @param PlayType   播放类型 Loop / Once / OnceAndDestory
 * @param Speed      播放速度倍率,以 1s 为单位基准,根据动画帧率计算实际播放周期时长
 * @param onFinishCallback 动画结束回调
 * @return AnimePlayer
@@ -148,7 +196,7 @@ player.play(
     AnimeCallback onFinishCallback = null
 );
 
-// 简化方式: 此方法大多数情况下用以播放特效动画，没有方向和动作类型
+// 简化播放: 此方法大多数情况下用以播放特效动画，没有方向和动作类型
 player.play(
     uint Serial,
     Anime.PlayType playType,
@@ -157,10 +205,20 @@ player.play(
 );
 
 // 播放一次
-player.playOnce(Anime.DirectionType directionType,Anime.ActionType actionType,float Speed=1f,AnimeCallback onFinishCallback=null);
+player.playOnce(
+    Anime.DirectionType directionType,
+    Anime.ActionType actionType,
+    float Speed=1f,
+    AnimeCallback onFinishCallback=null
+    );
 
 // 循环播放
-player.playLoop(Anime.DirectionType directionType,Anime.ActionType actionType,float Speed=1f,AnimeCallback onFinishCallback=null);
+player.playLoop(
+    Anime.DirectionType directionType,
+    Anime.ActionType actionType,
+    float Speed=1f,
+    AnimeCallback onFinishCallback=null
+    );
 
 /**
  * 可通过setter方法设置动画
@@ -204,23 +262,12 @@ player.Stop();
 ### 其他
 请根据情况自行探索修改代码适应应用场景
 
-## 3、版本及功能概述
-> 当前版本目前仅支持 魔力宝贝3.7-龙之沙漏 及以下版本的图档解析
-> 
-> 目前版本支持以下功能：
-> 
-> * `GraphicInfo` 图档索引解析
-> * `Graphic` 图档数据解析
-> * `Palet` 调色板数据解析
-> * `AnimeInfo` 动画索引解析
-> * `Anime` 动画数据解析
-> * `AudioTool` 音频索引及加载
-> * `AnimePlayer` 动画播放器挂载组件
-> * `Map` 服务端/客户端 图数据解析
-
 
 
 ## 4、更新日志
+### v 1.7
+> `ADD` 加入地图物件合批处理
+
 ### v 1.6
 > `ADD` 加入<font color="red">客户端</font>地图读取支持，同时附加了客户端地图文件缺失的名字和调色版映射表
 >
