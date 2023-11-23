@@ -15,7 +15,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using UnityEngine;
 
-namespace CGTool
+namespace CrossgateToolkit
 {
     //地图文件信息
     public class MapFileInfo
@@ -71,7 +71,7 @@ namespace CGTool
         //初始化地图文件列表
         public static void Init()
         {
-            DirectoryInfo mapDirectory = new DirectoryInfo(CGTool.MapFolder);
+            DirectoryInfo mapDirectory = new DirectoryInfo(CGTool.PATH.MAP);
             FileInfo[] mapFiles = mapDirectory.GetFiles();
             string match = @"^(\d+)_?(.+)?$";
             foreach (var fileInfo in mapFiles)
@@ -86,6 +86,7 @@ namespace CGTool
                 _file.FileName = filename;
                 _mapIndexFiles.Add(_file.Serial, _file);
             }
+            Debug.Log("[CGTool] 地图列表初始化完成,共" + _mapIndexFiles.Count + "个地图文件");
         }
 
         //获取全部地图列表
@@ -117,7 +118,7 @@ namespace CGTool
             if (!_mapIndexFiles.ContainsKey(serial)) return null;
             
             // print("找到地图文件: " + mapFileInfo.Name);
-            FileStream mapFileStream = new FileStream(CGTool.MapFolder + "/" + _mapIndexFiles[serial].FileName, FileMode.Open);
+            FileStream mapFileStream = new FileStream(CGTool.PATH.MAP + "/" + _mapIndexFiles[serial].FileName, FileMode.Open);
             BinaryReader mapFileReader = new BinaryReader(mapFileStream);
             
             MapInfo mapInfo = new MapInfo();
@@ -129,17 +130,16 @@ namespace CGTool
             byte[] mapHeader = mapFileReader.ReadBytes( 6);
             if(mapHeader[0]==0x4C && mapHeader[1]==0x53 && mapHeader[2]==0x32 && mapHeader[3]==0x4D && mapHeader[4]==0x41 && mapHeader[5]==0x50){
                 isClientMapFile = false;
-                Debug.Log("地图文件头: 服务端地图");
+                Debug.Log("[CGTool] 地图文件头: 服务端地图");
             }else if (mapHeader[0]==0x4D && mapHeader[1]==0x41 && mapHeader[2]==0x50){
                 isClientMapFile = true;
-                Debug.Log("地图文件头: 客户端地图");
+                Debug.Log("[CGTool] 地图文件头: 客户端地图");
             }
             else
             {
-                Debug.Log("地图文件头错误: " + _mapIndexFiles[serial].FileName);
+                Debug.LogError("[CGTool] 地图文件头错误: " + _mapIndexFiles[serial].FileName);
                 return null;
             }
-
             byte[] bytes;
             if (isClientMapFile)
             {
@@ -186,7 +186,7 @@ namespace CGTool
                 mapInfo.Height = BitConverter.ToUInt16(bytes,0);
             }
             
-            Debug.Log("地图宽度: " + mapInfo.Width + " 地图高度: " + mapInfo.Height);
+            
 
             byte[] mapBytes = mapFileReader.ReadBytes((int) (mapInfo.Width * mapInfo.Height * 2));
             byte[] mapCoverBytes = mapFileReader.ReadBytes((int) (mapInfo.Width * mapInfo.Height * 2));
@@ -220,7 +220,7 @@ namespace CGTool
                     mapGraphicSerial += 200000;
                     Version = 1;
                 }
-                GraphicInfoData graphicInfoData = GraphicInfo.GetGraphicInfoDataBySerial(Version, mapGraphicSerial);
+                GraphicInfoData graphicInfoData = GraphicInfo.GetGraphicInfoData(mapGraphicSerial);
                 if (graphicInfoData != null)
                 {
                     mapTile = new MapBlockData();
@@ -239,7 +239,7 @@ namespace CGTool
                     mapCoverGraphicSerial += 200000;
                     Version = 1;
                 }
-                graphicInfoData = GraphicInfo.GetGraphicInfoDataBySerial(Version, mapCoverGraphicSerial);
+                graphicInfoData = GraphicInfo.GetGraphicInfoData(mapCoverGraphicSerial);
                 if (graphicInfoData != null)
                 {
                     mapCoverTile = new MapBlockData();
@@ -356,6 +356,8 @@ namespace CGTool
             mapInfo.FixPlayerZs = fixPlayerZs;
             _cache[serial] = mapInfo;
             
+            Debug.Log("[CGTool] 读取地图: " + mapInfo.Name);
+            Debug.Log("地图宽度: " + mapInfo.Width + " 地图高度: " + mapInfo.Height);
             // CGTool.Logger.Write("地图解析完成时间:" + DateTime.Now);
             return mapInfo;
         }

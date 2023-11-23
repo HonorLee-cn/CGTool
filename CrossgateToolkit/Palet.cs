@@ -13,7 +13,7 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 
-namespace CGTool
+namespace CrossgateToolkit
 {
     public class Palet
     {
@@ -24,43 +24,34 @@ namespace CGTool
         public static List<Color32> GetPalet(int index)
         {
             //返回缓存数据
-            if (_cache.ContainsKey(index)) return _cache[index];
-            //获取新调色板
-            List<Color32> paletData = _loadPalet(index);
-            //加入缓存
-            if (paletData != null) _cache.Add(index, paletData);
-            if (paletData == null) paletData = GetPalet(0);
+            _cache.TryGetValue(index, out List<Color32> paletData);
             return paletData;
         }
 
-        //将数字生成指定长度字符串,不足位数补进行填充
-        private static string NumToString(uint num, int len, bool fillZero)
+        //调色板初始化
+        public static void Init()
         {
-            string numStr = num.ToString();
+            DirectoryInfo folderInfo = new DirectoryInfo(CGTool.PATH.PAL);
+
+            if (!folderInfo.Exists) throw new Exception("调色板目录不存在,请检查CGTool中是否配置相应PATH路径");
             
-            if (numStr.Length < len && fillZero)
+            FileInfo[] files = folderInfo.GetFiles();
+            foreach (FileInfo file in files)
             {
-                int count = len - numStr.Length;
-                for (int i = 0; i < count; i++)
-                {
-                    numStr = "0" + numStr;
-                }
+                if (!file.Name.StartsWith("palet_") || !file.Name.EndsWith(".cgp")) continue;
+                string indexStr = file.Name.Substring(6, 2);
+                int index = Convert.ToInt32(indexStr);
+                List<Color32> paletData = _loadPalet(file);
+                if (paletData != null) _cache.Add(index, paletData);
             }
-            return numStr;
+
+            Debug.Log("[CGTool] 调色板初始化完成,共加载" + _cache.Count + "个调色板");
         }
         
         //加载缓存数据
-        private static List<Color32> _loadPalet(int index)
+        private static List<Color32> _loadPalet(FileInfo paletFile)
         {
-            //查找调色板文件
-            DirectoryInfo paletFolderInfo = new DirectoryInfo(CGTool.PaletFolder);
-            string filledIndex = NumToString((uint)index, 2, true);
-            FileInfo[] files = paletFolderInfo.GetFiles("palet_" + filledIndex + ".cgp");
-            if (files.Length == 0) return null;
-            // CGTool.Logger.Write("加载调色板 - 编号: " + filledIndex);
-            //创建流读取器
-            FileInfo paletFileInfo = files[0];
-            FileStream paletFileStream = paletFileInfo.OpenRead();
+            FileStream paletFileStream = paletFile.OpenRead();
             BinaryReader paletReader = new BinaryReader(paletFileStream);
             
             //调色板解析表

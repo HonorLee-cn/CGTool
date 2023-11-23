@@ -26,10 +26,10 @@
 > 目前版本支持以下功能：
 > 
 > * `GraphicInfo` [图档索引解析](#获取图档索引数据)
-> * `Graphic` [图档数据解析](#获取指定索引图档数据)
+> * `GraphicData` [图档数据解析](#获取指定索引图档数据)
 > * `Palet` 调色板数据解析
 > * `Map` [服务端/客户端 图数据解析](#获取地图数据)
-> * `AudioTool` [音频索引及加载](#获取音频)
+> * `Audio` [音频索引及加载](#获取音频)
 > * `AnimeInfo` 动画索引解析
 > * `Anime` 动画数据解析
 > * `AnimePlayer` [动画播放器挂载组件](#动画播放) 
@@ -42,27 +42,41 @@
 
 ## 3、使用说明
 
-克隆当前仓库或下载zip包解压，将CGTool文件夹放置于Unity项目文件夹内引用
+克隆当前仓库或下载zip包解压，将 CrossgateToolkit 文件夹放置于Unity项目文件夹内引用
 
+最新 V2.0 版本已移除对魔力宝贝原版本的强绑定，初始化程序将根据目标路径进行自动分析
 
-下文示例中,所涉及到的版本号均对应:
+规划图档目录结构时，图档根目录下建议以数字版本号方式命名不同版本图档子目录
 
-```0``` 龙之沙漏前版本
+CGTool在初始化时对所配置图档根目录进行扫描，并按照``根目录优先``、``子目录按字符排序``方式依次加载并初始化图档数据
 
-```1``` 龙之沙漏
-
-所涉及的所有index、serial均指代图档或动画的具体编号而非索引档中序号
+所涉及的所有Index则为图档序号、Serial为图档或动画的具体编号而非索引档中序号，实际使用时请注意区分
 
 其他相关部分会逐渐更新完善
 
 ### 框架初始化
 在入口或初始化脚本头部引入CGTool初始化文件
 ```csharp
-using CGTool;
+using CrossgateToolkit;
 ```
 并在相关初始化位置对CGTool进行初始化
 ```csharp
-CGTool.CGTool.Init();
+// 配置Crossgate相关资源路径，如跳过则默认为 Environment.CurrentDirectory 下相关 目录
+CGTool.PATH = new CGTool.CGPath()
+{
+    // 调色板目录，不可省略
+    PAL = Application.persistentDataPath + "/pal",
+    // BIN图档目录，包含图档索引、图档文件、动画索引、动画文件等根目录
+    // 初始化时会自动便利查询分析所有文件数据，不可省略
+    BIN = Application.persistentDataPath + "/bin",
+    // 地图文件目录，省略则不对地图数据初始化
+    MAP = Application.persistentDataPath + "/map",
+    // 音频文件目录，省略则不对音频初始化
+    BGM = Application.persistentDataPath + "/bgm",
+    AUDIO = Application.persistentDataPath + "/se"
+};
+// 初始化
+CGTool.Init();
 ```
 CGTool初始化时，会自动对相关索引Info文件进行解析，请根据实际所采用版本情况，对脚本代码中解析相关的文件名称进行修改调整
 
@@ -70,25 +84,20 @@ CGTool初始化时，会自动对相关索引Info文件进行解析，请根据�
 ### 获取图档索引数据
 (图档基本索引数据属性信息)
 ```csharp
-// 通过编号获取图档,无需版本号(推荐方法)
-GraphicInfo.GetGraphicInfoDataBySerial(uint Serial);
+// 正常通过编号获取图档信息,无需版本号(常规图档)
+GraphicInfoData graphicInfoData = GraphicInfo.GetGraphicInfoData(uint Serial);
 
-// 通过编号获取图档,带版本号
-GraphicInfo.GetGraphicInfoDataBySerial(int version, uint Serial);
-
-// 通过地面编号获取GraphicInfo数据
-GraphicInfo.GetGraphicInfoDataByMapSerial(int Version, uint MapSerial);
-
-// 通过索引获取GraphicInfo数据
-GraphicInfo.GetGraphicInfoDataByIndex(int Version, uint Index);
+// 通过索引获取图档信息,带版本号(特殊无编号图档获取,如动画获取每帧图档时)
+GraphicInfoData graphicInfoData = GraphicInfo.GetGraphicInfoDataByIndex(string version, uint Serial);
 ```
 
-### 获取指定索引图档数据
+### 获取图档实体数据
 (图档实际数据,包含图像Sprite资源)
 ```csharp
-// 通过图档索引编号获取GraphicData数据
-Graphic.GetGraphicData(GraphicInfoData graphicInfoData,int PaletIndex=0);
-
+// 直接通过编号获取
+GraphicDetail graphicDetail = Graphic.GetGraphicDetail(uint serial,int palet = 0);
+// 或 通过GraphicInfoData获取
+GraphicDetail graphicDetail = GraphicData.GetGraphicDetail(GraphicInfoData graphicInfoData, int palet = 0);
 /**
  * 使用说明:
  * 所有通过Graphic获取的图档Sprite均已做偏移处理,可直接使用
@@ -98,9 +107,9 @@ Graphic.GetGraphicData(GraphicInfoData graphicInfoData,int PaletIndex=0);
  * 3.使用图档数据中的Sprite资源进行绘制
  */
 
-GraphicInfoData graphicInfoData = GraphicInfo.GetGraphicInfoDataBySerial(Serial);
-GraphicData graphicData = Graphic.GetGraphicData(graphicInfoData);
-SpriteRenderer(Image).sprite = graphicData.Sprite;
+GraphicInfoData graphicInfoData = GraphicInfo.GetGraphicInfoData(Serial);
+GraphicDetail graphicDetail = GraphicData.GetGraphicDetail(graphicInfoData ,0);
+SpriteRenderer(Image).sprite = graphicDetail.Sprite;
 ```
 
 ### 获取地图数据
@@ -123,32 +132,31 @@ Map.MapInfo mapInfo = Map.GetMap(uint Serial);
  */
 
 // 地面合批
-Dictionary<int, GraphicData> MapGroundSerialDic =
-    Graphic.PrepareMapGroundTexture(    // <= 合并地面图形
-        int MapID,
-        int PaletIndex,
-        List<GraphicInfoData> graphicInfoDataList
+Dictionary<int, GraphicDetail> MapGroundSerialDic =
+    GraphicData.BakeAsGround(    // <= 合并地面图形
+        List<GraphicInfoData> graphicInfoDataList,
+        int PaletIndex = 0
     );
 
 // 物件合批
-Dictionary<int, GraphicData> MapObjectSerialDic =
-    Graphic.PrepareMapObjectTexture(    // <= 合并物件图形
-        int MapID,
-        int PaletIndex,
-        List<GraphicInfoData> graphicInfoDataList
+Dictionary<int, GraphicDetail> MapObjectSerialDic =
+    Graphic.BakeAsObject(    // <= 合并物件图形
+        List<GraphicInfoData> graphicInfoDataList,
+        int PaletIndex = 0
     );
 ```
 ![地面合并效果](Preview/MapGroundMix.png)
 ![物件合并效果](Preview/MapObjectMix.png)
 ![资源合并后效果](Preview/batches.png)
 
-### 获取音频
+### 播放音频
 ```csharp
-//获取背景音乐
-AudioClip clip = AudioTool.GetAudio(AudioTool.Type.BGM,int serial);
+CGTool.Audio.Play(AudioSource audioSource,Type type, int serial)
 
+//播放背景音乐
+CGTool.Audio.Play(AudioSource audioSource,Audio.Type.BGM,int serial);
 //获取音效音频
-AudioClip clip = AudioTool.GetAudio(AudioTool.Type.EFFECT,int serial);
+CGTool.Audio.Play(AudioSource audioSource,Audio.Type.EFFECT,int serial);
 ```
 
 ### 动画播放
@@ -265,6 +273,15 @@ player.Stop();
 
 
 ## 4、更新日志
+### v 2.0
+> `ADD` 修改初始化方法以支持更复杂的图档文件建构
+>
+> `UPD` 图档解析支持多层目录结构并能自动识别加载，方便对图档进行扩充升级，建议根据版本号对图档子目录进行命名
+>
+> `UPD` 图档获取和加载方法优化，减少无用参数
+>
+> `UPD` 根据新的加载方式调整相关工具库代码以适应新的加载方式
+
 ### v 1.7
 > `ADD` 加入地图物件合批处理
 

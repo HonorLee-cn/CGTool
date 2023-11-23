@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace CGTool
+namespace CrossgateToolkit
 {
     public class MapExtra
     {

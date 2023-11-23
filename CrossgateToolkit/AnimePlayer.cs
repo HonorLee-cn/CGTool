@@ -12,7 +12,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace CGTool
+namespace CrossgateToolkit
 {
     //动画周期回调
     public delegate void AnimeCallback(Anime.ActionType actionType);
@@ -336,19 +336,20 @@ namespace CGTool
                 for (int i = 0; i < animeOption.AnimeDetail.AnimeFrameInfos.Length; i++)
                 {
                     AnimeFrameInfo animeFrameInfo = animeOption.AnimeDetail.AnimeFrameInfos[i];
-                    GraphicInfoData graphicInfoData = GraphicInfo.GetGraphicInfoDataByIndex(animeOption.AnimeDetail.Version, animeOption.AnimeDetail.AnimeFrameInfos[i].GraphicIndex);
+                    GraphicInfoData graphicInfoData = GraphicInfo.GetGraphicInfoDataByIndex(
+                        animeOption.AnimeDetail.Version, animeOption.AnimeDetail.AnimeFrameInfos[i].GraphicIndex);
                     if (graphicInfoData == null)
                     {
-                        Debug.Log("GraphicInfo Version:" + animeOption.AnimeDetail.Version + " Index:" +
-                                  animeOption.AnimeDetail.AnimeFrameInfos[i] + " is null");
+                        Debug.Log("GraphicInfo Serial:" +
+                                  animeOption.AnimeDetail.AnimeFrameInfos[i].GraphicIndex + " is null");
                         continue;
                     }
 
-                    GraphicData graphicData = Graphic.GetGraphicData(graphicInfoData, _paletIndex);
+                    GraphicDetail graphicData = GraphicData.GetGraphicDetail(graphicInfoData, _paletIndex);
                     if (graphicData == null)
                     {
-                        Debug.Log("GraphicData Version:" + animeOption.AnimeDetail.Version + " Index:" +
-                                  animeOption.AnimeDetail.AnimeFrameInfos[i] + " is null");
+                        Debug.Log("GraphicData Serial:" +
+                                  animeOption.AnimeDetail.AnimeFrameInfos[i].GraphicIndex + " is null");
                         continue;
                     }
                 

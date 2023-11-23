@@ -2,33 +2,30 @@
  * 魔力宝贝图档解析脚本 - CGTool
  * 
  * @Author  HonorLee (dev@honorlee.me)
- * @Version 1.0 (2023-04-15)
+ * @Version 1.0 (2023-11-20)
  * @License GPL-3.0
  *
- * Graphic.cs 图档解析类
+ * GraphicData.cs 图档解析类
  */
 
-using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
 using UnityEngine;
 
-namespace CGTool
+namespace CrossgateToolkit
 {
-    public class GraphicData
+    //图档数据详情
+    public class GraphicDetail
     {
-        //版本号
-        public int Version;
         //索引
         public uint Index;
-        //地图编号
-        public uint MapSerial;
+        //编号
+        public uint Serial;
         //图档宽度
         public uint Width;
         //图档高度
@@ -37,113 +34,58 @@ namespace CGTool
         public int OffsetX;
         //图档偏移Y
         public int OffsetY;
-        //图档合批偏移X
-        public int BatchOffsetX;
-        //图档合批偏移Y
-        public int BatchOffsetY;
         //Palet调色板Index
-        public int PaletIndex;
+        public int Palet;
         //图档Sprite
         public Sprite Sprite;
         //图档主色调,用于小地图绘制
         public Color32 PrimaryColor;
     }
-    public class Graphic
+    // 图档数据
+    public static class GraphicData
     {
-        //缓存Addr  Version -> Addr -> PaletIndex -> GraphicData
-        private static Dictionary<int, Dictionary<uint, Dictionary<int, GraphicData>>> _cache =
-            new Dictionary<int, Dictionary<uint, Dictionary<int, GraphicData>>>();
+        // // 图档缓存  Serial -> Palet -> GraphicDetail
+        // public static Dictionary<uint,Dictionary<int,GraphicDetail>> _cache = new Dictionary<uint, Dictionary<int, GraphicDetail>>();
         //
-        // //缓存Index映射 Version -> Index -> PaletIndex -> GraphicData
-        // private static Dictionary<int, Dictionary<uint, Dictionary<int, GraphicData>>> _indexCache =
-        //     new Dictionary<int, Dictionary<uint, Dictionary<int, GraphicData>>>();
-        //
-        // //缓存MapSerial映射 Version -> MapSerial -> PaletIndex -> GraphicData
-        // private static Dictionary<int, Dictionary<uint, Dictionary<int, GraphicData>>> _serialCache =
-        //     new Dictionary<int, Dictionary<uint, Dictionary<int, GraphicData>>>();
+        // // 图档索引缓存 Index -> Palet -> GraphicDetail
+        // public static Dictionary<uint,Dictionary<int,GraphicDetail>> _indexCache = new Dictionary<uint, Dictionary<int, GraphicDetail>>();
         
-        private static Dictionary<int,string> _graphicVersionPrefix = new Dictionary<int, string>()
+        public static Dictionary<GraphicInfoData,Dictionary<int,GraphicDetail>> _cache = new Dictionary<GraphicInfoData, Dictionary<int, GraphicDetail>>();
+        
+        // 获取图档
+        public static GraphicDetail GetGraphicDetail(GraphicInfoData graphicInfoData, int palet = 0)
         {
-            //龙之沙漏 之前版本前图档数据
-            {0,@"Graphic_\d+"},
-            //龙之沙漏 版本图档数据
-            {1,@"GraphicEx_\d+"}
-        };
-        
-        private static List<string> _graphicPaths = new List<string>();
-        
-        //地图地面Texture合批
-        //地图图档PaletIndex -> MapS 索引
-        // private static Dictionary<int,int> _mapPaletMap = new Dictionary<int, int>();
-        //地图图档Serial -> Palet ->MapIndex 索引
-        private static Dictionary<int,Dictionary<int,int>> _mapSerialMap = new Dictionary<int,Dictionary<int,int>>();
-        //地图图档MapIndex -> Palet -> Texture 索引
-        private static Dictionary<int,Dictionary<int,Texture2D>> _mapTextureMap = new Dictionary<int,Dictionary<int,Texture2D>>();
-        //地图图档MapIndex -> MapIndexList 索引库存,索引库容量为 2048x2048尺寸Texture可存储64x48地面图档的数量,即 2048/48(42) * 2048/64(32) ~= 1344
-        //解压地面图档时动态分配索引库存 MapIndex -> Count
-        private static List<int> _mapIndexLib = new List<int>();
-        //Graphic字节读取器缓存
-        private static BinaryReader[] _fileReaderCache = new BinaryReader[_graphicVersionPrefix.Count];
-
-        // 初始化
-        public static void Init()
-        {
-            //查找目录文件
-            DirectoryInfo directoryInfo = new DirectoryInfo(CGTool.BaseFolder);
-            FileInfo[] files = directoryInfo.GetFiles();
-            for (int i = 0; i < _graphicVersionPrefix.Count; i++)
+            GraphicDetail graphicDetail = null;
+            if (_cache.ContainsKey(graphicInfoData))
             {
-                foreach (FileInfo file in files)
+                if (_cache[graphicInfoData].ContainsKey(palet))
                 {
-                    if (Regex.IsMatch(file.Name, _graphicVersionPrefix[i]))
-                    {
-                        _graphicPaths.Add(file.Name);
-                        BinaryReader fileReader;
-                        string fileName = _graphicPaths[i];
-                        FileInfo fileInfo = new FileInfo(CGTool.BaseFolder + "/" + fileName);
-                        if (!fileInfo.Exists) return;
-                        //创建流读取器
-                        FileStream fileStream = fileInfo.OpenRead();
-                        fileReader = new BinaryReader(fileStream);
-                        _fileReaderCache[i] = fileReader;
-                        break;
-                    }    
+                    graphicDetail = _cache[graphicInfoData][palet];
                 }
-                
-            }
-        }
-
-        //根据地址获取GraphicData
-        public static GraphicData GetGraphicData(GraphicInfoData graphicInfoData,int PaletIndex=0,bool asMapGround=false)
-        {
-            GraphicData graphicData = null;
-
-            //缓存数据
-            if (_cache.ContainsKey(graphicInfoData.Version))
-            {
-                if (_cache[graphicInfoData.Version].ContainsKey(graphicInfoData.Addr))
+                else
                 {
-                    if (_cache[graphicInfoData.Version][graphicInfoData.Addr].ContainsKey(PaletIndex))
-                    {
-                        graphicData = _cache[graphicInfoData.Version][graphicInfoData.Addr][PaletIndex];
-                    }
+                    graphicDetail = _loadGraphicDetail(graphicInfoData, palet);
+                    _cache[graphicInfoData].Add(palet, graphicDetail);
                 }
             }
-            //无缓存则加载数据
-            if (graphicData == null) graphicData = _loadGraphicData(graphicInfoData, PaletIndex, asMapGround);
+            else
+            {
+                graphicDetail = _loadGraphicDetail(graphicInfoData, palet);
+                _cache.Add(graphicInfoData, new Dictionary<int, GraphicDetail>());
+                _cache[graphicInfoData].Add(palet, graphicDetail);
+            }
             
-            return graphicData;
+            return graphicDetail;
         }
-
-        //初始化加载GraphicData
-        private static GraphicData _loadGraphicData(GraphicInfoData graphicInfoData, int PaletIndex = 0,
-            bool asMapGround = false)
+        
+        // 解析图档
+        private static GraphicDetail _loadGraphicDetail(GraphicInfoData graphicInfoData,int palet = 0)
         {
-            GraphicData graphicData = new GraphicData();
-
+            GraphicDetail graphicDetail = new GraphicDetail();
+            
             //获取图像数据
-            List<Color32> pixels = UnpackGraphic(graphicInfoData, PaletIndex);
-            graphicData.PrimaryColor = pixels.Last();
+            List<Color32> pixels = UnpackGraphic(graphicInfoData, palet);
+            graphicDetail.PrimaryColor = pixels.Last();
             pixels.RemoveAt(pixels.Count - 1);
 
             //直接通过Texture2D做偏移,并转为Sprite的偏移量
@@ -155,9 +97,10 @@ namespace CGTool
             Texture2D texture2D;
             Sprite sprite;
 
+            // RGBA4444 减少内存占用
             texture2D = new Texture2D((int) graphicInfoData.Width, (int) graphicInfoData.Height,
                 TextureFormat.RGBA4444, false, false);
-            
+            // 固定点过滤
             texture2D.filterMode = FilterMode.Point;
             texture2D.SetPixels32(pixels.ToArray());
             // texture2D.LoadRawTextureData(rawTextureData);
@@ -165,43 +108,33 @@ namespace CGTool
             
             sprite = Sprite.Create(texture2D, new Rect(0, 0, texture2D.width, texture2D.height), offset, 1,1,SpriteMeshType.FullRect);
 
-
             //写入数据
-            graphicData.Version = graphicInfoData.Version;
-            graphicData.Index = graphicInfoData.Index;
-            graphicData.MapSerial = graphicInfoData.Serial;
-            graphicData.Width = graphicInfoData.Width;
-            graphicData.Height = graphicInfoData.Height;
-            graphicData.OffsetX = graphicInfoData.OffsetX;
-            graphicData.OffsetY = graphicInfoData.OffsetY;
-            graphicData.PaletIndex = PaletIndex;
-            graphicData.Sprite = sprite;
-
-            //缓存
-            if (!_cache.ContainsKey(graphicInfoData.Version))
-                _cache.Add(graphicInfoData.Version, new Dictionary<uint, Dictionary<int, GraphicData>>());
-            if(!_cache[graphicInfoData.Version].ContainsKey(graphicInfoData.Addr)) _cache[graphicInfoData.Version].Add(graphicInfoData.Addr,new Dictionary<int, GraphicData>());
-            if (!_cache[graphicInfoData.Version][graphicInfoData.Addr].ContainsKey(PaletIndex))
-                _cache[graphicInfoData.Version][graphicInfoData.Addr].Add(PaletIndex, graphicData);
-            
-            return graphicData;
+            graphicDetail.Index = graphicInfoData.Index;
+            graphicDetail.Serial = graphicInfoData.Serial;
+            graphicDetail.Width = graphicInfoData.Width;
+            graphicDetail.Height = graphicInfoData.Height;
+            graphicDetail.OffsetX = graphicInfoData.OffsetX;
+            graphicDetail.OffsetY = graphicInfoData.OffsetY;
+            graphicDetail.Palet = palet;
+            graphicDetail.Sprite = sprite;
+            return graphicDetail;
         }
-    
-        //地图sprite缓存  <地图索引,<调色板索引,Sprite>>
-        // private static Dictionary<int,Dictionary<int,Dictionary<int,GraphicData>>> _mapSpriteMap = new Dictionary<int, Dictionary<int, Dictionary<int, GraphicData>>>();
 
-        //预备地图缓存
-        public static Dictionary<int, GraphicData> PrepareMapGroundTexture(int MapID, int PaletIndex,
-            List<GraphicInfoData> groundInfos)
+        #region 地图合批
+        private class BatchData
         {
-            //如果已经缓存过,则直接返回
-            // if(_mapSpriteMap.ContainsKey(MapID) && _mapSpriteMap[MapID].ContainsKey(PaletIndex)) return _mapSpriteMap[MapID][PaletIndex];
-            //如果没有缓存过,则创建缓存
-            // if(!_mapSpriteMap.ContainsKey(MapID)) _mapSpriteMap.Add(MapID,new Dictionary<int, Dictionary<int, GraphicData>>());
-            Dictionary<int, GraphicData> graphicDataDic = new Dictionary<int, GraphicData>();
+            public int BatchOffsetX;
+            public int BatchOffsetY;
+            public GraphicDetail GraphicDetail;
+        }
+        //预备地图缓存
+        public static Dictionary<uint, GraphicDetail> BakeAsGround(List<GraphicInfoData> groundInfos,int palet=0)
+        {
+            
+            Dictionary<uint, GraphicDetail> graphicDataDic = new Dictionary<uint, GraphicDetail>();
             // _mapSpriteMap[MapID].Add(PaletIndex, graphicDataDic);
             
-            List<GraphicData> graphicDatas = new List<GraphicData>();
+            List<BatchData> batchDatas = new List<BatchData>();
             Texture2D texture2D = null;
             
             for (var i = 0; i < groundInfos.Count; i++)
@@ -210,10 +143,10 @@ namespace CGTool
                 if (i % 1344 == 0)
                 {
                     //合并
-                    if (i != 0) Combine(texture2D, graphicDatas);
+                    if (i != 0) Combine(texture2D, batchDatas);
                     
                     //清空
-                    graphicDatas.Clear();
+                    batchDatas.Clear();
                     int height = 2048;
 
                     if (i + 1344 > groundInfos.Count-1)
@@ -228,43 +161,40 @@ namespace CGTool
                 }
                 
                 GraphicInfoData graphicInfoData = groundInfos[i];
-                GraphicData graphicData = new GraphicData();
-                
-                //获取图像数据
-                List<Color32> pixels = UnpackGraphic(graphicInfoData, PaletIndex);
-                graphicData.PrimaryColor = pixels.Last();
-                pixels.RemoveAt(pixels.Count - 1);
+                GraphicDetail graphicData = GetGraphicDetail(graphicInfoData, palet);
                 
                 int x = i % 32 * 64;
                 int y = i / 32 * 48;
 
-                texture2D.SetPixels32(x, y, (int) graphicInfoData.Width, (int) graphicInfoData.Height,
-                    pixels.ToArray());
+                if(graphicData!=null && graphicData.Sprite!=null)
+                {
+                    Color32[] pixels = graphicData.Sprite.texture.GetPixels32();
+                    texture2D.SetPixels32(x, y, (int) graphicInfoData.Width, (int) graphicInfoData.Height,
+                        pixels.ToArray());    
+                }
+                BatchData batchData = new BatchData();
+                
 
-                //写入数据
-                graphicData.Version = graphicInfoData.Version;
-                graphicData.Index = graphicInfoData.Index;
-                graphicData.MapSerial = graphicInfoData.Serial;
-                graphicData.Width = graphicInfoData.Width;
-                graphicData.Height = graphicInfoData.Height;
-                graphicData.OffsetX = graphicInfoData.OffsetX;
-                graphicData.OffsetY = graphicInfoData.OffsetY;
-                graphicData.PaletIndex = PaletIndex;
-                graphicData.BatchOffsetX = x;
-                graphicData.BatchOffsetY = y;
+                batchData.BatchOffsetX = x;
+                batchData.BatchOffsetY = y;
+                batchData.GraphicDetail = graphicData;
 
-                graphicDatas.Add(graphicData);
+                batchDatas.Add(batchData);
             }
             
             //最后一次合并
-            if (graphicDatas.Count > 0) Combine(texture2D, graphicDatas);
+            if (batchDatas.Count > 0)
+            {
+                Combine(texture2D, batchDatas);
+                batchDatas.Clear();
+            }
 
-            void Combine(Texture2D texture2D,List<GraphicData> graphicDatas)
+            void Combine(Texture2D texture2D,List<BatchData> batchDatas)
             {
                 texture2D.Apply();
-                for (var i = 0; i < graphicDatas.Count; i++)
+                for (var i = 0; i < batchDatas.Count; i++)
                 {
-                    GraphicData graphicDataPiece = graphicDatas[i];
+                    GraphicDetail graphicDataPiece = batchDatas[i].GraphicDetail;
                     //直接通过Texture2D做偏移,并转为Sprite的偏移量
                     Vector2 offset = new Vector2(0f, 1f);
                     offset.x += -(graphicDataPiece.OffsetX * 1f) / graphicDataPiece.Width;
@@ -272,11 +202,25 @@ namespace CGTool
                         
                     int X = i % 32 * 64;
                     int Y = i / 32 * 48;
-                        
-                    Sprite sprite = Sprite.Create(texture2D, new Rect(X, Y, (int)graphicDataPiece.Width, (int)graphicDataPiece.Height),offset, 1, 1, SpriteMeshType.FullRect);
-                    graphicDataPiece.Sprite = sprite;
 
-                    graphicDataDic.Add((int) graphicDataPiece.MapSerial, graphicDataPiece);
+                    Sprite sprite = Sprite.Create(texture2D,
+                        new Rect(X, Y, (int)graphicDataPiece.Width, (int)graphicDataPiece.Height), offset, 1, 1,
+                        SpriteMeshType.FullRect);
+                    
+                    GraphicDetail graphicData = new GraphicDetail()
+                    {
+                        Index = graphicDataPiece.Index,
+                        Serial = graphicDataPiece.Serial,
+                        Width = graphicDataPiece.Width,
+                        Height = graphicDataPiece.Height,
+                        OffsetX = graphicDataPiece.OffsetX,
+                        OffsetY = graphicDataPiece.OffsetY,
+                        Palet = graphicDataPiece.Palet,
+                        Sprite = sprite,
+                        PrimaryColor = graphicDataPiece.PrimaryColor
+                    };
+
+                    graphicDataDic.Add(graphicData.Serial, graphicData);
                 }
             }
 
@@ -284,28 +228,21 @@ namespace CGTool
         }
         
         //预备地图物件缓存
-        partial class TextureData
+        private class TextureData
         {
             public int MaxHeight;
             public int MaxWidth;
-            public List<GraphicData> GraphicDatas = new List<GraphicData>();
+            public List<BatchData> BatchDatas = new List<BatchData>();
             public List<GraphicInfoData> GraphicInfoDatas = new List<GraphicInfoData>();
         }
-        public static Dictionary<int, GraphicData> PrepareMapObjectTexture(int MapID, int PaletIndex,
-            List<GraphicInfoData> objectInfos)
+        public static Dictionary<uint, GraphicDetail> BakeAsObject(List<GraphicInfoData> objectInfos,int palet = 0)
         {
-            //如果已经缓存过,则直接返回
-            // if(_mapSpriteMap.ContainsKey(MapID) && _mapSpriteMap[MapID].ContainsKey(PaletIndex)) return _mapSpriteMap[MapID][PaletIndex];
-            //如果没有缓存过,则创建缓存
-            // if(!_mapSpriteMap.ContainsKey(MapID)) _mapSpriteMap.Add(MapID,new Dictionary<int, Dictionary<int, GraphicData>>());
-            
             // 单个Texture最大尺寸
             int maxWidth = 4096;
             int maxHeight = 4096;
             
             List<TextureData> textureDatas = new List<TextureData>();
-            Dictionary<int, GraphicData> graphicDataDic = new Dictionary<int, GraphicData>();
-            // _mapSpriteMap[MapID].Add(PaletIndex, graphicDataDic);
+            Dictionary<uint, GraphicDetail> graphicDataDic = new Dictionary<uint, GraphicDetail>();
 
             // 根据objectInfos的内,GraphicInfoData的Width,Height进行排序,优先排序Width,使图档从小到大排列
             objectInfos = objectInfos.OrderBy(obj => obj.Width).ThenBy(obj => obj.Height).ToList();
@@ -335,34 +272,26 @@ namespace CGTool
                     textureDatas.Add(textureData);
                     textureData = new TextureData();
                 }
-
-                GraphicData graphicData = new GraphicData();
-                //写入数据
-                graphicData.Version = graphicInfoData.Version;
-                graphicData.Index = graphicInfoData.Index;
-                graphicData.MapSerial = graphicInfoData.Serial;
-                graphicData.Width = graphicInfoData.Width;
-                graphicData.Height = graphicInfoData.Height;
-                graphicData.OffsetX = graphicInfoData.OffsetX;
-                graphicData.OffsetY = graphicInfoData.OffsetY;
-                graphicData.PaletIndex = PaletIndex;
-                graphicData.BatchOffsetX = offsetX;
-                graphicData.BatchOffsetY = offsetY;
+                
+                BatchData batchData = new BatchData();
+                batchData.BatchOffsetX = offsetX;
+                batchData.BatchOffsetY = offsetY;
+                batchData.GraphicDetail = GetGraphicDetail(graphicInfoData, palet);
 
                 // graphicDatas.Add(graphicData);
                 
-                textureData.GraphicDatas.Add(graphicData);
+                textureData.BatchDatas.Add(batchData);
                 textureData.GraphicInfoDatas.Add(graphicInfoData);
                 
                 
-                maxRowHeight = Mathf.Max(maxRowHeight, (int) graphicData.Height);
+                maxRowHeight = Mathf.Max(maxRowHeight, (int) graphicInfoData.Height);
                 textureData.MaxHeight = Mathf.Max(textureData.MaxHeight, offsetY + maxRowHeight);
-                textureData.MaxWidth = Mathf.Max(textureData.MaxWidth, offsetX + (int) graphicData.Width);
-                offsetX += (int) graphicData.Width + 5;
+                textureData.MaxWidth = Mathf.Max(textureData.MaxWidth, offsetX + (int) graphicInfoData.Width);
+                offsetX += (int) graphicInfoData.Width + 5;
             }
             
             //最后一次合并
-            if (textureData.GraphicDatas.Count > 0) textureDatas.Add(textureData);
+            if (textureData.BatchDatas.Count > 0) textureDatas.Add(textureData);
             
             //合并Texture2D
             for (var i = 0; i < textureDatas.Count; i++)
@@ -373,49 +302,63 @@ namespace CGTool
                 Texture2D texture2DPiece = new Texture2D(textureDataPiece.MaxWidth, textureDataPiece.MaxHeight, TextureFormat.RGBA4444, false, false);
                 texture2DPiece.filterMode = FilterMode.Point;
                 texture2DPiece.SetPixels32(colors);
-                for (var n = 0; n < textureDataPiece.GraphicDatas.Count; n++)
+                for (var n = 0; n < textureDataPiece.BatchDatas.Count; n++)
                 {
-                    GraphicData graphicData = textureDataPiece.GraphicDatas[n];
+                    BatchData batchData = textureDataPiece.BatchDatas[n];
                     GraphicInfoData graphicInfoData = textureDataPiece.GraphicInfoDatas[n];
-                    
-                    //设置图像数据
-                    List<Color32> pixels = UnpackGraphic(graphicInfoData, PaletIndex);
-                    graphicData.PrimaryColor = pixels.Last();
-                    pixels.RemoveAt(pixels.Count - 1);
-                
-                    texture2DPiece.SetPixels32(graphicData.BatchOffsetX, graphicData.BatchOffsetY, (int) graphicInfoData.Width, (int) graphicInfoData.Height,
-                        pixels.ToArray());
+
+                    if (batchData.GraphicDetail!=null)
+                    {
+                        Color32[] pixels = batchData.GraphicDetail.Sprite.texture.GetPixels32();
+                        texture2DPiece.SetPixels32(batchData.BatchOffsetX, batchData.BatchOffsetY, (int) graphicInfoData.Width, (int) graphicInfoData.Height,
+                            pixels.ToArray());
+                    }
                 }
                 texture2DPiece.Apply();
-                Combine(texture2DPiece, textureDataPiece.GraphicDatas);
+                Combine(texture2DPiece, textureDataPiece.BatchDatas);
             }
 
-            void Combine(Texture2D texture2D,List<GraphicData> graphicDatas)
+            void Combine(Texture2D texture2D,List<BatchData> batchDatas)
             {
-                for (var i = 0; i < graphicDatas.Count; i++)
+                for (var i = 0; i < batchDatas.Count; i++)
                 {
-                    GraphicData graphicDataPiece = graphicDatas[i];
+                    BatchData batchData = batchDatas[i];
                     //直接通过Texture2D做偏移,并转为Sprite的偏移量
                     Vector2 offset = new Vector2(0f, 1f);
-                    offset.x += -(graphicDataPiece.OffsetX * 1f) / graphicDataPiece.Width;
-                    offset.y -= (-graphicDataPiece.OffsetY * 1f) / graphicDataPiece.Height;
+                    offset.x += -(batchData.GraphicDetail.OffsetX * 1f) / batchData.GraphicDetail.Width;
+                    offset.y -= (-batchData.GraphicDetail.OffsetY * 1f) / batchData.GraphicDetail.Height;
 
-                    Sprite sprite = Sprite.Create(texture2D, new Rect(graphicDataPiece.BatchOffsetX, graphicDataPiece.BatchOffsetY, (int)graphicDataPiece.Width, (int)graphicDataPiece.Height),offset, 1, 1, SpriteMeshType.FullRect);
-                    graphicDataPiece.Sprite = sprite;
-                    graphicDataDic.Add((int) graphicDataPiece.MapSerial, graphicDataPiece);
+                    Sprite sprite = Sprite.Create(texture2D, new Rect(batchData.BatchOffsetX, batchData.BatchOffsetY, (int)batchData.GraphicDetail.Width, (int)batchData.GraphicDetail.Height),offset, 1, 1, SpriteMeshType.FullRect);
+                    GraphicDetail graphicDetail = new GraphicDetail()
+                    {
+                        Index = batchData.GraphicDetail.Index,
+                        Serial = batchData.GraphicDetail.Serial,
+                        Width = batchData.GraphicDetail.Width,
+                        Height = batchData.GraphicDetail.Height,
+                        OffsetX = batchData.GraphicDetail.OffsetX,
+                        OffsetY = batchData.GraphicDetail.OffsetY,
+                        Palet = batchData.GraphicDetail.Palet,
+                        Sprite = sprite,
+                        PrimaryColor = batchData.GraphicDetail.PrimaryColor
+                    };
+                    
+                    // graphicDataPiece.Sprite = sprite;
+                    graphicDataDic.Add(graphicDetail.Serial, graphicDetail);
                 }
             }
 
             return graphicDataDic;
         }
+        #endregion
         
-        private static List<Color32> UnpackGraphic(GraphicInfoData graphicInfoData,int PaletIndex){
+        //解压图像数据
+        private static List<Color32> UnpackGraphic(GraphicInfoData graphicInfoData,int PaletIndex=0){
             List<Color32> pixels = new List<Color32>();
             //获取调色板
             List<Color32> palet = Palet.GetPalet(PaletIndex);
 
             //调整流指针
-            BinaryReader fileReader = _fileReaderCache[graphicInfoData.Version];
+            BinaryReader fileReader = graphicInfoData.GraphicReader;
             fileReader.BaseStream.Position = graphicInfoData.Addr;
 
             //读入目标字节集
@@ -513,14 +456,11 @@ namespace CGTool
             
             //主色调加入最后
             pixels.Add(new Color32((byte) r, (byte) g, (byte) b, 255));
-
-                
             return pixels;
         }
     }
     
-    
-    //解压缩交给IJob处理
+        //解压缩交给IJob处理
     [BurstCompile]
     public struct DecompressJob : IJob
     {
