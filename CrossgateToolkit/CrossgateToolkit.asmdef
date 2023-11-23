@@ -1,0 +1,17 @@
+{
+    "name": "CrossgateToolkit",
+    "rootNamespace": "CrossgateToolkit",
+    "references": [
+        "GUID:2665a8d13d1b3f18800f46e256720795",
+        "GUID:21b0c8d1703a94250bfac916590cea4f"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

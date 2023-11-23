@@ -1,0 +1,12 @@
+{
+    "name": "me.honorlee.crossgate-toolkit",
+    "version": "2.0.0",
+    "displayName": "CGTool - Crossgate(魔力宝贝)图档解析工具库 ",
+    "description": "这是针对《Crossgate（魔力宝贝）》游戏(3.7及以下版本)图档解析工具库，除了可以解析游戏bin图档索引、图档数据外，同时也支持动画数据解析、动画播放、地图（服务端/客户端格式）数据解析、音频数据解析等功能。",
+    "unity": "2021.3",
+    "author": {
+        "name":"Honor Lee",
+        "email": "dev@honorlee.me",
+        "url": "https://honorlee.me"
+    }
+}
