@@ -110,6 +110,22 @@ namespace CrossgateToolkit
             MapInfo mapInfo = _loadMap(serial);
             return mapInfo;
         }
+        
+        // 地面数据合批
+        public static Dictionary<uint,GraphicDetail> BakeGrounds(List<GraphicInfoData> graphicInfoDatas,int palet = 0)
+        {
+            Dictionary<uint, GraphicDetail>
+                graphicDataDict = GraphicData.BakeGraphics(graphicInfoDatas, palet, 2048, 0);
+            return graphicDataDict;
+        }
+        
+        // 物件数据合批
+        public static Dictionary<uint,GraphicDetail> BakeObjects(List<GraphicInfoData> graphicInfoDatas,int palet = 0)
+        {
+            Dictionary<uint, GraphicDetail>
+                graphicDataDict = GraphicData.BakeGraphics(graphicInfoDatas, palet, 4096);
+            return graphicDataDict;
+        }
 
         //加载地图数据
         private static MapInfo _loadMap(uint serial)

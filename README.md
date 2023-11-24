@@ -133,29 +133,49 @@ SpriteRenderer(Image).sprite = graphicDetail.Sprite;
 Map.MapInfo mapInfo = Map.GetMap(uint Serial);
 ```
 
-### 获取地图地面/地图物件图档合批数据
+### 图档合批
+
+为减少渲染时的Drawcall和Batchs动态合批数量提高性能并降低内存消耗，工具库提供了大量图档合批（并）处理方法
+
+图档合并时，会自动根据每个图档图像由小到大进行排序处理，以最大限度将多个图档合并至一个或多个稍大的Texture2D中
+
 ```csharp
 /**
- * * 针对地面数据将地面图档自动进行拼合成一个或多个2048*2048尺寸Texture2D
- * * 针对地图物件(建筑等)拼合成一个或多个不大于4096*4096尺寸Texture2D
- * 拼合后的Texture2D数据拆分为对应的Sprite资源
- * 这样可以大幅降低地图的内存占用和Drawcall数量,提高渲染的动态合批性能
- * 另:
- * 代码中暂时禁用了已合并地面Texture2D的缓存功能,如需使用请取消相关代码注释或自行修改
- * 由于4.0后地图模式变动,部分地图图档过大,所以这个方法可能不适用于4.0后的地图
+* 合批图档
+* 通过指定图档序列，对图档进行合批处理，并返回合批后的图档数据
+* @param graphicInfoDatas 图档索引数据序列
+* @param palet 调色板序号
+* @param maxTextureSize 单个Texture最大尺寸，地面数据建议2048，物件数据建议4096
+* @param padding 图档间隔，可以有效避免图档渲染时出现多余的黑边或像素黏连
+* @return Dictionary 合批后的图档数据，Key(unit)为图档数据编号，Value为图档数据
+*/
+GraphicData.BakeGraphics(
+    List<GraphicInfoData> graphicInfoDatas,
+    int palet = 0,
+    int maxTextureSize = 2048,
+    int padding = 0)
+```
+
+### 地图地面/物件图档合批数据
+针对地图图档部分合批提供了相应的简化方法，可以酌情使用
+```csharp
+/**
+ * * 地面数据将拼合成一个或多个2048*2048尺寸Texture2D
+ * * 物件(建筑等)拼合成一个或多个不大于4096*4096尺寸Texture2D
+ * 另: 由于4.0后地图模式变动,部分地图图档过大,所以这个方法可能不适用于4.0后的地图
  */
 
 // 地面合批
 Dictionary<int, GraphicDetail> MapGroundSerialDic =
-    GraphicData.BakeAsGround(    // <= 合并地面图形
-        List<GraphicInfoData> graphicInfoDataList,
+    Map.BakeGrounds(    // <= 合并地面图形
+        List<GraphicInfoData> graphicInfoDatas,
         int PaletIndex = 0
     );
 
 // 物件合批
 Dictionary<int, GraphicDetail> MapObjectSerialDic =
-    Graphic.BakeAsObject(    // <= 合并物件图形
-        List<GraphicInfoData> graphicInfoDataList,
+    Graphic.BakeObjects(    // <= 合并物件图形
+        List<GraphicInfoData> graphicInfoDatas,
         int PaletIndex = 0
     );
 ```
@@ -287,6 +307,9 @@ player.Stop();
 
 
 ## 4、更新日志
+### v 2.1
+> `UPD` 图档合并方法进行统一处理，并增加地图相关简便方法
+
 ### v 2.0
 > `ADD` 修改初始化方法以支持更复杂的图档文件建构
 >

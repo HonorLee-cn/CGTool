@@ -127,14 +127,10 @@ namespace CrossgateToolkit
             _imageRenderer = GetComponent<Image>();
             _spriteRenderer = GetComponent<SpriteRenderer>();
             _rectTransform = GetComponent<RectTransform>();
-            //碰撞盒,仅当需要添加鼠标事件时使用
-            // _boxCollider2D = GetComponent<BoxCollider2D>();
             
             if(_imageRenderer == null) _imageRenderer = gameObject.AddComponent<Image>();
             if(_spriteRenderer == null) _spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
             if(_rectTransform == null) _rectTransform = gameObject.AddComponent<RectTransform>();
-            // if(_boxCollider2D == null) _boxCollider2D = gameObject.AddComponent<BoxCollider2D>();
-            
         }
 
         private void Start()
@@ -209,16 +205,16 @@ namespace CrossgateToolkit
             }
         }
 
-        /**
-         * 播放动画,调用此方法将会清空当前播放队列,调用完成可通过链式调用nextPlay方法添加动画到播放队列
-         * @param Serial 动画序列号
-         * @param Direction 动画方向
-         * @param ActionType 动画动作
-         * @param PlayType 播放类型
-         * @param Speed 播放速度,以 1s 为基准,根据动画帧率计算实际播放周期时长
-         * @param onFinishCallback 动画结束回调
-         * @return AnimePlayer
-         */
+        /// <summary>
+        /// 播放动画。调用此方法将会清空当前播放队列，调用完成可通过链式调用 <c>nextPlay</c> 方法添加动画到播放队列。
+        /// </summary>
+        /// <param name="Serial">动画序列号</param>
+        /// <param name="Direction">动画方向</param>
+        /// <param name="ActionType">动画动作</param>
+        /// <param name="PlayType">播放类型</param>
+        /// <param name="Speed">播放速度，以 1s 为基准，根据动画帧率计算实际播放周期时长</param>
+        /// <param name="onFinishCallback">动画结束回调</param>
+        /// <returns>AnimePlayer</returns>
         public AnimePlayer play(uint Serial, Anime.DirectionType Direction = Anime.DirectionType.North,
             Anime.ActionType actionType = Anime.ActionType.Stand, Anime.PlayType playType = Anime.PlayType.Once,
             float Speed = 1f, AnimeCallback onFinishCallback = null)
@@ -499,11 +495,6 @@ namespace CrossgateToolkit
             
             //问题帧自动跳过
             if (_currentFrame<_frames.Length && _frames[_currentFrame] == null) return;
-            //自动偏移
-            // float graphicWidth = _frames[_currentFrame].Sprite.rect.width;
-            // float graphicHeight = _frames[_currentFrame].Sprite.rect.height;
-            // float offsetX = -_frames[_currentFrame].GraphicInfo.OffsetX;
-            // float offsetY = _frames[_currentFrame].GraphicInfo.OffsetY;
             
             //根据当前帧Sprite动态调整对象大小
             float width = _frames[_currentFrame].Sprite.rect.width * 1f;
@@ -528,27 +519,6 @@ namespace CrossgateToolkit
                 _rectTransform.localPosition = Vector3.zero;
             }
             frameTexture = _frames[_currentFrame].Sprite.texture;
-            
-            // Vector2 offset = Vector2.zero;
-            // offset.x += -(_frames[_currentFrame].GraphicInfo.OffsetX * 1f) / _frames[_currentFrame].GraphicInfo.Width;
-            // offset.y -= (-_frames[_currentFrame].GraphicInfo.OffsetY * 1f) / _frames[_currentFrame].GraphicInfo.Height;
-            
-            // _rectTransform.pivot = offset;
-            
-            // pos.x = (width + _frames[_currentFrame].GraphicInfo.OffsetX)/1f;
-            // pos.y = (height + _frames[_currentFrame].GraphicInfo.OffsetY)/1f;
-            
-            
-            
-            // 2D碰撞器自动调整,但是动态碰撞器反而会导致重叠大物体选中效果不稳定,效果不如固定大小碰撞器好
-            // if (_boxCollider2D != null)
-            // {
-            //     Vector2 newSize =_boxCollider2D.size 
-            //     _boxCollider2D.size = new Vector2(width, height);
-            // }
-            // _rectTransform.pivot = new Vector2(offsetX,offsetY);
-            // _rectTransform.localPosition = new Vector3(0f,  0f);
-            
             
             _timer = Time.time * 1000;
             

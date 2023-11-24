@@ -8,6 +8,7 @@
  * GraphicData.cs 图档解析类
  */
 
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -121,13 +122,24 @@ namespace CrossgateToolkit
         }
 
         #region 地图合批
+        // 合批数据
         private class BatchData
         {
             public int BatchOffsetX;
             public int BatchOffsetY;
             public GraphicDetail GraphicDetail;
         }
+        // 图档合批
+        private class TextureData
+        {
+            public int MaxHeight;
+            public int MaxWidth;
+            public List<BatchData> BatchDatas = new List<BatchData>();
+            public List<GraphicInfoData> GraphicInfoDatas = new List<GraphicInfoData>();
+        }
+        
         //预备地图缓存
+        [Obsolete("该方法已废弃,请使用BakeGraphics方法")]
         public static Dictionary<uint, GraphicDetail> BakeAsGround(List<GraphicInfoData> groundInfos,int palet=0)
         {
             
@@ -227,25 +239,26 @@ namespace CrossgateToolkit
             return graphicDataDic;
         }
         
-        //预备地图物件缓存
-        private class TextureData
-        {
-            public int MaxHeight;
-            public int MaxWidth;
-            public List<BatchData> BatchDatas = new List<BatchData>();
-            public List<GraphicInfoData> GraphicInfoDatas = new List<GraphicInfoData>();
-        }
-        public static Dictionary<uint, GraphicDetail> BakeAsObject(List<GraphicInfoData> objectInfos,int palet = 0)
+        /// <summary>
+        /// 合批图档
+        /// 通过指定图档序列，对图档进行合批处理，并返回合批后的图档数据
+        /// </summary>
+        /// <param name="graphicInfoDatas">图档索引数据序列</param>
+        /// <param name="palet">调色板序号</param>
+        /// <param name="maxTextureSize">单个Texture最大尺寸，地面数据建议2048，物件数据建议4096</param>
+        /// <param name="padding">图档间隔，可以有效避免图档渲染时出现多余的黑边或像素黏连</param>
+        /// <returns>合批后的图档数据，Key(unit)为图档数据编号，Value为图档数据</returns>
+        public static Dictionary<uint, GraphicDetail> BakeGraphics(List<GraphicInfoData> graphicInfoDatas,int palet = 0, int maxTextureSize = 2048,int padding = 0)
         {
             // 单个Texture最大尺寸
-            int maxWidth = 4096;
-            int maxHeight = 4096;
+            int maxWidth = maxTextureSize;
+            int maxHeight = maxTextureSize;
             
             List<TextureData> textureDatas = new List<TextureData>();
             Dictionary<uint, GraphicDetail> graphicDataDic = new Dictionary<uint, GraphicDetail>();
 
             // 根据objectInfos的内,GraphicInfoData的Width,Height进行排序,优先排序Width,使图档从小到大排列
-            objectInfos = objectInfos.OrderBy(obj => obj.Width).ThenBy(obj => obj.Height).ToList();
+            graphicInfoDatas = graphicInfoDatas.OrderBy(obj => obj.Width).ThenBy(obj => obj.Height).ToList();
 
             int offsetX = 0;    // X轴偏移量
             int offsetY = 0;    // Y轴偏移量
@@ -253,14 +266,14 @@ namespace CrossgateToolkit
             
             TextureData textureData = new TextureData();
             
-            for (var i = 0; i < objectInfos.Count; i++)
+            for (var i = 0; i < graphicInfoDatas.Count; i++)
             {
-                GraphicInfoData graphicInfoData = objectInfos[i];
+                GraphicInfoData graphicInfoData = graphicInfoDatas[i];
                 // 如果宽度超过4096,则换行
                 if((graphicInfoData.Width + offsetX) > maxWidth)
                 {
                     offsetX = 0;
-                    offsetY = offsetY + maxRowHeight + 5;
+                    offsetY = offsetY + maxRowHeight + padding;
                     maxRowHeight = 0;
                 }
                 // 如果高度超过2048,则生成新的Texture2D
@@ -287,7 +300,7 @@ namespace CrossgateToolkit
                 maxRowHeight = Mathf.Max(maxRowHeight, (int) graphicInfoData.Height);
                 textureData.MaxHeight = Mathf.Max(textureData.MaxHeight, offsetY + maxRowHeight);
                 textureData.MaxWidth = Mathf.Max(textureData.MaxWidth, offsetX + (int) graphicInfoData.Width);
-                offsetX += (int) graphicInfoData.Width + 5;
+                offsetX += (int) graphicInfoData.Width + padding;
             }
             
             //最后一次合并
