@@ -8,5 +8,9 @@
         "name":"Honor Lee",
         "email": "dev@honorlee.me",
         "url": "https://honorlee.me"
-    }
+    },
+    "references": [
+        "Unity.Burst",
+        "Unity.VisualScripting"   
+    ]
 }
