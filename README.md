@@ -42,7 +42,21 @@
 
 ## 3、使用说明
 
+### 基本环境
+
+请确认Unity已安装以下Package包:
+```
+"dependencies": {
+    "com.unity.burst": "1.6.0",
+    "com.unity.visualscripting": "1.9.0"
+}
+```
+
 克隆当前仓库或下载zip包解压，将 CrossgateToolkit 文件夹放置于Unity项目文件夹内引用
+
+可直接下载Release中unitypackage直接导入
+
+### 工具库说明
 
 最新 V2.0 版本已移除对魔力宝贝原版本的强绑定，初始化程序将根据目标路径进行自动分析
 
