@@ -1,5 +1,5 @@
 {
-    "name": "CrossgateToolkit",
+    "name": "ms.honorlee.crossgate-toolkit",
     "rootNamespace": "CrossgateToolkit",
     "references": [
         "Unity.Burst",
