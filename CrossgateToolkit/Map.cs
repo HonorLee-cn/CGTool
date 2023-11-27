@@ -230,12 +230,6 @@ namespace CrossgateToolkit
                 bytes = mapReader.ReadBytes(2);
                 if(!isClientMapFile) Array.Reverse(bytes);
                 uint mapGraphicSerial = BitConverter.ToUInt16(bytes,0);
-                int Version = 0;
-                if (mapGraphicSerial > 20000)
-                {
-                    mapGraphicSerial += 200000;
-                    Version = 1;
-                }
                 GraphicInfoData graphicInfoData = GraphicInfo.GetGraphicInfoData(mapGraphicSerial);
                 if (graphicInfoData != null)
                 {
@@ -248,13 +242,8 @@ namespace CrossgateToolkit
                 MapBlockData mapCoverTile = null;
                 bytes = mapCoverReader.ReadBytes(2);
                 if(!isClientMapFile) Array.Reverse(bytes);
+                
                 uint mapCoverGraphicSerial = BitConverter.ToUInt16(bytes,0);
-                Version = 0;
-                if (mapCoverGraphicSerial > 30000 || mapCoverGraphicSerial==25290)
-                {
-                    mapCoverGraphicSerial += 200000;
-                    Version = 1;
-                }
                 graphicInfoData = GraphicInfo.GetGraphicInfoData(mapCoverGraphicSerial);
                 if (graphicInfoData != null)
                 {
