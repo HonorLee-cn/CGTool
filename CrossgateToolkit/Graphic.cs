@@ -71,28 +71,42 @@ namespace CrossgateToolkit
             public int VersionCode;
             public string FullVersion;
         }
-        private static VersionInfo AnalysisVersion(string prefix,string filename)
+        private static VersionInfo AnalysisVersion(string prefix,FileInfo fileinfo)
         {
             VersionInfo versionInfo = new VersionInfo();
+            int suffixIndex = fileinfo.Name.LastIndexOf('.');
+                
+            // 解析版本号
+            string filename = fileinfo.Name.Substring(0, suffixIndex);
             versionInfo.FullVersion = filename.Substring(prefix.Length);
-            string[] versionArr = versionInfo.FullVersion.Split('_');
-            if (String.IsNullOrEmpty(versionArr[0]))
+            if (string.IsNullOrEmpty(versionInfo.FullVersion))
             {
-                versionArr = versionArr.Skip(1).ToArray();
-            }
-
-            if (int.TryParse(versionArr[0], out int code))
-            {
-                versionInfo.VersionCode = code;
+                string parentName = fileinfo.Directory != null ? fileinfo.Directory.Name : "";
+                versionInfo.FullVersion = "";
+                versionInfo.Version = parentName.ToUpper();
             }
             else
             {
-                versionInfo.Version = versionArr[0].ToUpper();
-                if(int.TryParse(versionArr[^1], out int vcode))
+                string[] versionArr = versionInfo.FullVersion.Split('_');
+                if (String.IsNullOrEmpty(versionArr[0]))
                 {
-                    versionInfo.VersionCode = vcode;
+                    versionArr = versionArr.Skip(1).ToArray();
+                }
+            
+                if (int.TryParse(versionArr[0], out int code))
+                {
+                    versionInfo.VersionCode = code;
+                }
+                else
+                {
+                    versionInfo.Version = versionArr[0].ToUpper();
+                    if(int.TryParse(versionArr[^1], out int vcode))
+                    {
+                        versionInfo.VersionCode = vcode;
+                    }
                 }
             }
+
             
             return versionInfo;
         }
@@ -106,16 +120,12 @@ namespace CrossgateToolkit
             foreach (FileInfo fileInfo in fileInfos)
             {
                 if (!fileInfo.Name.EndsWith(".bin",StringComparison.OrdinalIgnoreCase)) continue;
-                int suffixIndex = fileInfo.Name.LastIndexOf('.');
-                
-                // 解析版本号
-                string filename = fileInfo.Name.Substring(0, suffixIndex);
                 
                 if (fileInfo.Name.StartsWith("graphicinfo", StringComparison.OrdinalIgnoreCase))
                 {
                     // 找到GraphicInfo文件
                     // 获取对应版本号 GraphicInfo(*).bin
-                    VersionInfo versionInfo = AnalysisVersion("graphicinfo", filename);
+                    VersionInfo versionInfo = AnalysisVersion("graphicinfo", fileInfo);
                     // 判断是否存在对应graphic文件,忽略大小写
                     string graphicFileName = "graphic" + versionInfo.FullVersion + ".bin";
                     FileInfo graphicFileInfo = GetFileInfoByName(fileInfo.Directory, graphicFileName);
@@ -134,9 +144,10 @@ namespace CrossgateToolkit
                 {
                     // 找到AnimeInfo文件
                     // 获取对应版本号 AnimeInfo(*).bin
-                    VersionInfo versionInfo = AnalysisVersion("animeinfo", filename);
+                    VersionInfo versionInfo = AnalysisVersion("animeinfo", fileInfo);
                     // 判断是否存在对应anime文件
                     string animeFileName = "anime" + versionInfo.FullVersion + ".bin";
+                    Debug.Log(animeFileName);
                     FileInfo animeFileInfo = GetFileInfoByName(fileInfo.Directory, animeFileName);
                     if (!animeFileInfo.Exists)
                     {

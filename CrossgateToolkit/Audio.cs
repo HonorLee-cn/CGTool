@@ -33,7 +33,7 @@ namespace CrossgateToolkit
             BGM,
             EFFECT
         }
-        // 获取指定类型、编号的音频AudioClip
+        // 播放指定类型、编号的音频AudioClip
         public static void Play(AudioSource audioSource,Type type, int id)
         {
             AudioClip audioClip;

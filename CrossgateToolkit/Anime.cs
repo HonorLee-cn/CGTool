@@ -173,12 +173,6 @@ namespace CrossgateToolkit
             
             long DataLength = infoFileStream.Length / 12;
             
-            //判断是否为高版本
-            bool isHighVersion = false;
-            dataFileStream.Position = 0x10;
-            byte[] tmpBytes = dataFileReader.ReadBytes(4);
-            if(tmpBytes.SequenceEqual(highVersionFlag)) isHighVersion = true;
-            
             // 循环初始化动画数据
             for (int i = 0; i < DataLength; i++)
             {
@@ -190,9 +184,17 @@ namespace CrossgateToolkit
                 animeInfo.Addr = BitConverter.ToUInt32(infoFileReader.ReadBytes(4),0);
                 animeInfo.ActionCount = infoFileReader.ReadUInt16();
                 animeInfo.Unknow = infoFileReader.ReadBytes(2);
+                if (animeInfo.Addr > dataFileStream.Length) break;
                 dataFileStream.Position = animeInfo.Addr;
                 for (int j = 0; j < animeInfo.ActionCount; j++)
                 {
+                    
+                    // 高版本标识
+                    bool isHighVersion = false;
+                    dataFileStream.Position += 16;
+                    if(dataFileReader.ReadBytes(4).SequenceEqual(highVersionFlag)) isHighVersion = true;
+                    dataFileStream.Position -= 20;
+                    
                     AnimeDetail animeData = new AnimeDetail();
                     animeData.Version = Version;
                     animeData.Serial = animeInfo.Serial;
@@ -200,6 +202,7 @@ namespace CrossgateToolkit
                     animeData.ActionType = dataFileReader.ReadUInt16();
                     animeData.CycleTime = BitConverter.ToUInt32(dataFileReader.ReadBytes(4),0);
                     animeData.FrameCount = BitConverter.ToUInt32(dataFileReader.ReadBytes(4),0);
+                    
                     // 高版本
                     if (isHighVersion)
                     {
@@ -223,12 +226,13 @@ namespace CrossgateToolkit
                     for (int k = 0; k < animeData.FrameCount; k++)
                     {
                         byte[] frameBytes = dataFileReader.ReadBytes(10);
+                        if (frameBytes.Length <10) break;
                         BinaryReader frameReader = new BinaryReader(new MemoryStream(frameBytes));
                         AnimeFrameInfo animeFrameInfo = new AnimeFrameInfo();
                         //GraphicIndex序号
                         animeFrameInfo.GraphicIndex = BitConverter.ToUInt32(frameReader.ReadBytes(4),0);
                         animeFrameInfo.OffsetX = BitConverter.ToInt16(frameReader.ReadBytes(2),0);
-                        animeFrameInfo.OffsetY = BitConverter.ToInt16(frameReader.ReadBytes(2),0);
+                        animeFrameInfo.OffsetY = BitConverter.ToInt16(frameReader.ReadBytes(2), 0);
                         
                         //标识位
                         int flag = BitConverter.ToInt16(frameReader.ReadBytes(2),0);
