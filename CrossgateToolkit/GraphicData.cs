@@ -42,6 +42,9 @@ namespace CrossgateToolkit
         //图档主色调,用于小地图绘制
         public Color32 PrimaryColor;
     }
+    
+    
+    
     // 图档数据
     public static class GraphicData
     {
@@ -52,9 +55,8 @@ namespace CrossgateToolkit
         // public static Dictionary<uint,Dictionary<int,GraphicDetail>> _indexCache = new Dictionary<uint, Dictionary<int, GraphicDetail>>();
         
         public static Dictionary<GraphicInfoData,Dictionary<int,GraphicDetail>> _cache = new Dictionary<GraphicInfoData, Dictionary<int, GraphicDetail>>();
-        
         // 获取图档
-        public static GraphicDetail GetGraphicDetail(GraphicInfoData graphicInfoData, int palet = 0)
+        public static GraphicDetail GetGraphicDetail(GraphicInfoData graphicInfoData, int palet = 0,int subPalet = 0)
         {
             GraphicDetail graphicDetail = null;
             if (_cache.ContainsKey(graphicInfoData))
@@ -65,13 +67,13 @@ namespace CrossgateToolkit
                 }
                 else
                 {
-                    graphicDetail = _loadGraphicDetail(graphicInfoData, palet);
+                    graphicDetail = _loadGraphicDetail(graphicInfoData, palet, subPalet);
                     _cache[graphicInfoData].Add(palet, graphicDetail);
                 }
             }
             else
             {
-                graphicDetail = _loadGraphicDetail(graphicInfoData, palet);
+                graphicDetail = _loadGraphicDetail(graphicInfoData, palet, subPalet);
                 _cache.Add(graphicInfoData, new Dictionary<int, GraphicDetail>());
                 _cache[graphicInfoData].Add(palet, graphicDetail);
             }
@@ -80,12 +82,14 @@ namespace CrossgateToolkit
         }
         
         // 解析图档
-        private static GraphicDetail _loadGraphicDetail(GraphicInfoData graphicInfoData,int palet = 0)
+        private static GraphicDetail _loadGraphicDetail(GraphicInfoData graphicInfoData,int palet = 0,int subPalet = 0)
         {
             GraphicDetail graphicDetail = new GraphicDetail();
             
             //获取图像数据
-            List<Color32> pixels = UnpackGraphic(graphicInfoData, palet);
+            List<Color32> pixels = UnpackGraphic(graphicInfoData, palet, subPalet);
+            if(pixels==null) return null;
+            
             graphicDetail.PrimaryColor = pixels.Last();
             pixels.RemoveAt(pixels.Count - 1);
 
@@ -100,7 +104,7 @@ namespace CrossgateToolkit
 
             // RGBA4444 减少内存占用
             texture2D = new Texture2D((int) graphicInfoData.Width, (int) graphicInfoData.Height,
-                TextureFormat.RGBA4444, false, false);
+                TextureFormat.RGBA4444, false, true);
             // 固定点过滤
             texture2D.filterMode = FilterMode.Point;
             texture2D.SetPixels32(pixels.ToArray());
@@ -365,10 +369,10 @@ namespace CrossgateToolkit
         #endregion
         
         //解压图像数据
-        private static List<Color32> UnpackGraphic(GraphicInfoData graphicInfoData,int PaletIndex=0){
+        private static List<Color32> UnpackGraphic(GraphicInfoData graphicInfoData,int PaletIndex=0,int SubPaletIndex=0){
             List<Color32> pixels = new List<Color32>();
             //获取调色板
-            List<Color32> palet = Palet.GetPalet(PaletIndex);
+            List<Color32> palet;
 
             //调整流指针
             BinaryReader fileReader = graphicInfoData.GraphicReader;
@@ -381,31 +385,38 @@ namespace CrossgateToolkit
             BinaryReader contentReader = new BinaryReader(new MemoryStream(Content));
 
             //16字节头信息
-            byte[] HEAD = contentReader.ReadBytes(2);
+            byte[] RD = contentReader.ReadBytes(2);
             int Version = contentReader.ReadByte();
             int Unknow = contentReader.ReadByte();
             uint Width = contentReader.ReadUInt32();
             uint Height = contentReader.ReadUInt32();
-            uint Length = contentReader.ReadUInt32();
-
+            uint DataLen = contentReader.ReadUInt32();
+            uint innerPaletLen = 0;
+            
+            
+            // 低版本头部长度为16,高版本为20
+            int headLen = 16;
+            if (Version > 1)
+            {
+                headLen = 20;
+                innerPaletLen = contentReader.ReadUInt32();
+            }
             
             //数据长度
-            uint contentLen = Length - 16;
+            int contentLen = (int)(DataLen - headLen);
             int pixelLen = (int) (graphicInfoData.Width * graphicInfoData.Height);
-
+            
             int[] paletIndex;
             if (graphicInfoData.UnpackedPaletIndex == null)
             {
                 //解压数据
                 byte[] contentBytes = contentReader.ReadBytes((int) contentLen);
                 NativeArray<byte> bytes = new NativeArray<byte>((int) contentBytes.Length, Allocator.TempJob);
-                
                 bytes.CopyFrom(contentBytes);
-
-                // Debug.Log(contentBytes.Length + "   " + bytes.Length);
+                long decompressLen = pixelLen + innerPaletLen;
+                
                 NativeArray<int> colorIndexs =
-                    new NativeArray<int>(pixelLen, Allocator.TempJob);
-
+                    new NativeArray<int>((int)decompressLen, Allocator.TempJob);
 
                 DecompressJob decompressJob = new DecompressJob()
                 {
@@ -425,6 +436,31 @@ namespace CrossgateToolkit
                 paletIndex = graphicInfoData.UnpackedPaletIndex;
             }
 
+            if (SubPaletIndex > 0)
+            {
+                palet = Palet.GetPalet(SubPaletIndex);
+                if (palet == null)
+                {
+                    GraphicInfoData subPaletInfoData = GraphicInfo.GetGraphicInfoData((uint)SubPaletIndex);
+                    Graphic.GetGraphicDetail((uint)SubPaletIndex);
+                    palet = subPaletInfoData.InnerPalet;
+                    Palet.AddPalet(SubPaletIndex, palet);
+                }
+            }
+            else
+            {
+                if (innerPaletLen > 0)
+                {
+                    int[] innerPaletIndex = paletIndex.Skip(pixelLen).Take((int) innerPaletLen).ToArray();
+                    palet = AnalysisInnerPalet(innerPaletIndex).ToList();
+                    paletIndex = paletIndex.Take(pixelLen).ToArray();
+                    graphicInfoData.InnerPalet = palet;
+                }
+                else
+                {
+                    palet = Palet.GetPalet(PaletIndex);
+                }
+            }
             //释放连接
             contentReader.Dispose();
             contentReader.Close();
@@ -435,8 +471,15 @@ namespace CrossgateToolkit
             int b = 0;
             foreach (int index in paletIndex)
             {
-                // Debug.Log(index);
-                Color32 color32 = palet[index];
+                Color32 color32;
+                if (index == 999 || (index > palet.Count - 1))
+                {
+                    color32 = Color.clear;
+                }
+                else
+                {
+                    color32 = palet[index];   
+                }
                 pixels.Add(color32);
                 r += color32.r;
                 g += color32.g;
@@ -471,6 +514,137 @@ namespace CrossgateToolkit
             pixels.Add(new Color32((byte) r, (byte) g, (byte) b, 255));
             return pixels;
         }
+
+        //分析高版本内部调色板
+        private static Color32[] AnalysisInnerPalet(int[] bytes)
+        {
+            int colorLen = bytes.Length / 3;
+            Color32[] palet = new Color32[colorLen + 1];
+            for (var i = 0; i < colorLen; i++)
+            {
+                int[] paletBytes = bytes.Skip(i * 3).Take(3).ToArray();
+                Color32 color32 = new Color32();
+                color32.r = (byte)paletBytes[2];
+                color32.g = (byte)paletBytes[1];
+                color32.b = (byte)paletBytes[0];
+                color32.a = 0xFF;
+                palet[i] = color32;
+            }
+            palet[colorLen] = Color.clear;
+            return palet;
+        }
+
+        #region 测试解压
+        private static int[] TestDecompress(byte[] bytes)
+        {
+            List<int> colorIndexs = new List<int>();
+            int _index = -1;
+
+            int next()
+            {
+                _index++;
+                if (_index > bytes.Length - 1) return -1;
+                return bytes[_index];
+            }
+
+            while (_index < (bytes.Length - 1))
+            {
+                int head = next();
+                if (head == -1) break;
+
+                int repeat = 0;
+                if (head < 0x10)
+                {
+                    repeat = head;
+                    for (var i = 0; i < repeat; i++)
+                    {
+                        colorIndexs.Add(next());
+                    }
+
+                }
+                else if (head < 0x20)
+                {
+                    repeat = head % 0x10 * 0x100 + next();
+                    for (var i = 0; i < repeat; i++)
+                    {
+                        colorIndexs.Add(next());
+                    }
+
+                }
+                else if (head < 0x80)
+                {
+                    repeat = head % 0x20 * 0x10000 + next() * 0x100 + next();
+                    for (var i = 0; i < repeat; i++)
+                    {
+                        colorIndexs.Add(next());
+                    }
+
+                }
+                else if (head < 0x90)
+                {
+                    repeat = head % 0x80;
+                    int index = next();
+                    for (var i = 0; i < repeat; i++)
+                    {
+                        colorIndexs.Add(index);
+                    }
+
+                }
+                else if (head < 0xa0)
+                {
+                    int index = next();
+                    repeat = head % 0x90 * 0x100 + next();
+                    for (var i = 0; i < repeat; i++)
+                    {
+                        colorIndexs.Add(index);
+                    }
+
+                }
+                else if (head < 0xc0)
+                {
+                    int index = next();
+                    repeat = head % 0xa0 * 0x10000 + next() * 0x100 + next();
+                    for (var i = 0; i < repeat; i++)
+                    {
+                        colorIndexs.Add(index);
+                    }
+
+                }
+                else if (head < 0xd0)
+                {
+                    repeat = head % 0xc0;
+                    for (var i = 0; i < repeat; i++)
+                    {
+                        colorIndexs.Add(999);
+                    }
+
+                }
+                else if (head < 0xe0)
+                {
+                    repeat = head % 0xd0 * 0x100 + next();
+                    for (var i = 0; i < repeat; i++)
+                    {
+                        colorIndexs.Add(999);
+                    }
+
+                }
+                else if (head < 0xff)
+                {
+                    repeat = head % 0xe0 * 0x10000 + next() * 0x100 + next();
+                    for (var i = 0; i < repeat; i++)
+                    {
+                        colorIndexs.Add(999);
+                    }
+                }
+            }
+
+            return colorIndexs.ToArray();
+
+
+        }
+
+        #endregion 测试解压
+        
     }
     
         //解压缩交给IJob处理
@@ -494,6 +668,7 @@ namespace CrossgateToolkit
         }
         private void AddColorIndex(int index)
         {
+            if (_colorIndex > colorIndexs.Length - 1) return;
             colorIndexs[_colorIndex] = index;
             _colorIndex++;
         }
@@ -508,9 +683,9 @@ namespace CrossgateToolkit
             {
                 while (_index<=_maxIndex)
                 {
-                    int index = NextByte();
-                    if(index==-1) break;
-                    AddColorIndex(index);
+                    int pindex = NextByte();
+                    if(pindex==-1) break;
+                    AddColorIndex(pindex);
                 }
             }
             else
@@ -586,7 +761,7 @@ namespace CrossgateToolkit
                         repeat = head % 0xc0;
                         for (var i = 0; i < repeat; i++)
                         {
-                            AddColorIndex(256);
+                            AddColorIndex(999);
                         }
     
                     }
@@ -595,7 +770,7 @@ namespace CrossgateToolkit
                         repeat = head % 0xd0 * 0x100 + NextByte();
                         for (var i = 0; i < repeat; i++)
                         {
-                            AddColorIndex(256);
+                            AddColorIndex(999);
                         }
     
                     }
@@ -604,7 +779,7 @@ namespace CrossgateToolkit
                         repeat = head % 0xe0 * 0x10000 + NextByte() * 0x100 + NextByte();
                         for (var i = 0; i < repeat; i++)
                         {
-                            AddColorIndex(256);
+                            AddColorIndex(999);
                         }
                     }
                 }

@@ -39,13 +39,23 @@ namespace CrossgateToolkit
             foreach (FileInfo file in files)
             {
                 if (!file.Name.StartsWith("palet_") || !file.Name.EndsWith(".cgp")) continue;
-                string indexStr = file.Name.Substring(6, 2);
-                int index = Convert.ToInt32(indexStr);
-                List<Color32> paletData = _loadPalet(file);
-                if (paletData != null) _cache.Add(index, paletData);
+                string tmp = file.Name.Split("_")[1];
+                string indexStr = tmp.Split(".")[0];
+                // string indexStr = file.Name.Substring(6, 2);
+                if (int.TryParse(indexStr, out int index))
+                {
+                    List<Color32> paletData = _loadPalet(file);
+                    if (paletData != null) _cache.Add(index, paletData);    
+                }
             }
 
             Debug.Log("[CGTool] 调色板初始化完成,共加载" + _cache.Count + "个调色板");
+        }
+        
+        // 添加新调色板
+        public static void AddPalet(int index, List<Color32> paletData)
+        {
+            _cache[index] = paletData;
         }
         
         //加载缓存数据

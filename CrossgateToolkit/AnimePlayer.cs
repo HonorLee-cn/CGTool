@@ -314,7 +314,7 @@ namespace CrossgateToolkit
             {
                 Anime.BakeAnimeFrames(animeOption.AnimeDetail, _paletIndex);
                 //获取动画帧数据
-                for (int i = 0; i < animeOption.AnimeDetail.AnimeFrameInfos.Length; i++)
+                for (int i = 0; i < animeOption.AnimeDetail.AnimeFrameInfos.Count; i++)
                 {
                     if(!animeOption.AnimeDetail.AnimeFrameInfos[i].AnimeSprites.ContainsKey(_paletIndex)) continue;
                     if(animeOption.AnimeDetail.AnimeFrameInfos[i].AnimeSprites[_paletIndex] == null) continue;
@@ -329,7 +329,7 @@ namespace CrossgateToolkit
             else
             {
                 //获取动画帧数据
-                for (int i = 0; i < animeOption.AnimeDetail.AnimeFrameInfos.Length; i++)
+                for (int i = 0; i < animeOption.AnimeDetail.AnimeFrameInfos.Count; i++)
                 {
                     AnimeFrameInfo animeFrameInfo = animeOption.AnimeDetail.AnimeFrameInfos[i];
                     GraphicInfoData graphicInfoData = GraphicInfo.GetGraphicInfoDataByIndex(
@@ -341,7 +341,10 @@ namespace CrossgateToolkit
                         continue;
                     }
 
-                    GraphicDetail graphicData = GraphicData.GetGraphicDetail(graphicInfoData, _paletIndex);
+                    int subPaletIndex = 0;
+                    if (animeOption.AnimeDetail.IsHighVersion) subPaletIndex = (int)animeOption.AnimeDetail.Serial;
+                    GraphicDetail graphicData =
+                        GraphicData.GetGraphicDetail(graphicInfoData, _paletIndex, subPaletIndex);
                     if (graphicData == null)
                     {
                         Debug.Log("GraphicData Serial:" +
@@ -504,6 +507,14 @@ namespace CrossgateToolkit
             {
                 _imageRenderer.sprite = _frames[_currentFrame].Sprite;
                 _imageRenderer.SetNativeSize();
+                if (_currentAnime.AnimeDetail.Reverse)
+                {
+                    _imageRenderer.transform.localScale = new Vector3(-1, 1, 1);
+                }
+                else
+                {
+                    _imageRenderer.transform.localScale = new Vector3(1, 1, 1);
+                }
                 Vector3 pos = Vector3.zero;
                 pos.x = _frames[_currentFrame].GraphicInfo.OffsetX;
                 pos.y = -_frames[_currentFrame].GraphicInfo.OffsetY;
@@ -516,6 +527,14 @@ namespace CrossgateToolkit
                 _rectTransform.sizeDelta = new Vector2(width, height);
                 _spriteRenderer.size = new Vector2(width, height);
                 _rectTransform.pivot = new Vector2(0.5f,0f);
+                if (_currentAnime.AnimeDetail.Reverse)
+                {
+                    _spriteRenderer.flipX = true;
+                }
+                else
+                {
+                    _spriteRenderer.flipX = false;
+                }
                 _rectTransform.localPosition = Vector3.zero;
             }
             frameTexture = _frames[_currentFrame].Sprite.texture;

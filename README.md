@@ -21,8 +21,10 @@
 ![预览](Preview/Preview.png)
 
 ## 2、功能支持
-> 当前版本目前仅支持 魔力宝贝3.7-龙之沙漏 及以下版本的图档解析
-> 
+> 当前版本目前已支持 魔力宝贝3.7-龙之沙漏 及以下版本的图档解析，以及 4.0 版本以上图档、动画数据解析
+>
+> <font color="red">注意：当前版本 4.0 及以上地图暂不支持</font>
+>
 > 目前版本支持以下功能：
 > 
 > * `GraphicInfo` [图档索引解析](#获取图档索引数据)
@@ -36,8 +38,13 @@
 >   * `AnimePlayer` 动画关键帧(攻击/攻击完成)事件回调
 >   * `AnimePlayer` 音频帧事件回调
 
-![动画效果](Preview/AnimePlayer.png)
-![动画效果](Preview/AnimeSupport.gif)
+<div style="display: flex;flex-direction: column;align-items: center;">
+<div><img style="" src="Preview/AnimeSupport.gif"><img style="" src="Preview/AnimeHSupport.gif"></div>
+<div><img style="" src="Preview/AnimePlayer.png"></div>
+<div><img style="" src="Preview/PUK3Graphic.jpg"></div>
+
+</div>
+
 
 
 ## 3、使用说明
@@ -65,6 +72,8 @@
 CGTool在初始化时对所配置图档根目录进行扫描，并按照``根目录优先``、``子目录按字符排序``方式依次加载并初始化图档数据
 
 所涉及的所有Index则为图档序号、Serial为图档或动画的具体编号而非索引档中序号，实际使用时请注意区分
+
+
 
 其他相关部分会逐渐更新完善
 
@@ -307,6 +316,11 @@ player.Stop();
 
 
 ## 4、更新日志
+### v 2.2
+> `ADD` 增加 <font color="red">4.0 版本(乐园之卵)及后续版本图档、动画解析</font>
+>
+> `UPD` 调整图档目录版本号分析过程，以更好的适应多种图档目录结构
+
 ### v 2.1
 > `UPD` 图档合并方法进行统一处理，并增加地图相关简便方法
 

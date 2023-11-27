@@ -11,6 +11,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEngine;
 
 namespace CrossgateToolkit
@@ -58,15 +59,30 @@ namespace CrossgateToolkit
     //动画数据
     public class AnimeDetail
     {
+        // 动画编号
         public uint Serial;
+        // 动画版本
         public string Version;
+        // 方向
         public int Direction;
+        // 动作
         public int ActionType;
+        // 动画循环时间
         public uint CycleTime;
+        // 帧数
         public uint FrameCount;
+
+        // 高版本 - 标识
+        public bool IsHighVersion;
+        // 高版本 - 调色板
+        public int Palet;
+        // 高版本 - 图像反转
+        public bool Reverse;
+        // 高版本 - 结束标识
+        public byte[] END_FLAG;
         public Dictionary<int,Texture2D> AnimeTextures = new Dictionary<int, Texture2D>();
         // public Texture2D AnimeTexture;
-        public AnimeFrameInfo[] AnimeFrameInfos;
+        public List<AnimeFrameInfo> AnimeFrameInfos;
         // public byte[] unknown;
     }
     //动画相关Enum类型
@@ -132,6 +148,8 @@ namespace CrossgateToolkit
             Once,
             OnceAndDestroy
         }
+        private static byte[] highVersionFlag = { 0xFF, 0xFF, 0xFF, 0xFF };
+        
         //动画列表缓存    Serial -> AnimeInfo
         private static Dictionary<uint, AnimeInfo> _animeInfoCache = new Dictionary<uint, AnimeInfo>();
         
@@ -143,9 +161,16 @@ namespace CrossgateToolkit
             FileStream dataFileStream = animeFile.OpenRead();
             BinaryReader infoFileReader = new BinaryReader(infoFileStream);
             BinaryReader dataFileReader = new BinaryReader(dataFileStream);
-
-            // Dictionary<uint, AnimeInfo> animeInfos = new Dictionary<uint, AnimeInfo>();
+            
             long DataLength = infoFileStream.Length / 12;
+            
+            //判断是否为高版本
+            bool isHighVersion = false;
+            dataFileStream.Position = 0x10;
+            byte[] tmpBytes = dataFileReader.ReadBytes(4);
+            if(tmpBytes.SequenceEqual(highVersionFlag)) isHighVersion = true;
+            
+            // 循环初始化动画数据
             for (int i = 0; i < DataLength; i++)
             {
                 //初始化对象
@@ -166,41 +191,49 @@ namespace CrossgateToolkit
                     animeData.ActionType = dataFileReader.ReadUInt16();
                     animeData.CycleTime = BitConverter.ToUInt32(dataFileReader.ReadBytes(4),0);
                     animeData.FrameCount = BitConverter.ToUInt32(dataFileReader.ReadBytes(4),0);
-                    animeData.AnimeFrameInfos = new AnimeFrameInfo[animeData.FrameCount];
-
-                    
+                    // 高版本
+                    if (isHighVersion)
+                    {
+                        animeData.IsHighVersion = true;
+                        animeData.Palet = dataFileReader.ReadUInt16();
+                        animeData.Reverse = dataFileReader.ReadUInt16() % 2 == 1;
+                        animeData.END_FLAG = dataFileReader.ReadBytes(4);
+                    }
+                    animeData.AnimeFrameInfos = new List<AnimeFrameInfo>();
                     
                     // if (animeInfo.Index == 101201) Debug.Log("----------------------------------");
                     for (int k = 0; k < animeData.FrameCount; k++)
                     {
-                        animeData.AnimeFrameInfos[k] = new AnimeFrameInfo();
+                        byte[] frameBytes = dataFileReader.ReadBytes(10);
+                        BinaryReader frameReader = new BinaryReader(new MemoryStream(frameBytes));
+                        AnimeFrameInfo animeFrameInfo = new AnimeFrameInfo();
                         //GraphicIndex序号
-                        animeData.AnimeFrameInfos[k].GraphicIndex = BitConverter.ToUInt32(dataFileReader.ReadBytes(4),0);
-                        animeData.AnimeFrameInfos[k].OffsetX = BitConverter.ToInt16(dataFileReader.ReadBytes(2),0);
-                        animeData.AnimeFrameInfos[k].OffsetY = BitConverter.ToInt16(dataFileReader.ReadBytes(2),0);
+                        animeFrameInfo.GraphicIndex = BitConverter.ToUInt32(frameReader.ReadBytes(4),0);
+                        animeFrameInfo.OffsetX = BitConverter.ToInt16(frameReader.ReadBytes(2),0);
+                        animeFrameInfo.OffsetY = BitConverter.ToInt16(frameReader.ReadBytes(2),0);
                         
                         //标识位
-                        int flag = BitConverter.ToInt16(dataFileReader.ReadBytes(2),0);
-
-                        // if (animeData.Index == 110053) Debug.Log("FLAG---" + " " + k + "  " + flag);
+                        int flag = BitConverter.ToInt16(frameReader.ReadBytes(2),0);
 
                         if (flag>20000)
                         {
                             //击打判定
-                            animeData.AnimeFrameInfos[k].Effect = EffectType.Hit;
-                            animeData.AnimeFrameInfos[k].AudioIndex = flag - 20000;
+                            animeFrameInfo.Effect = EffectType.Hit;
+                            animeFrameInfo.AudioIndex = flag - 20000;
                         }
                         else if(flag>10000)
                         {
                             //攻击动作结束判定
-                            animeData.AnimeFrameInfos[k].Effect = EffectType.HitOver;
-                            animeData.AnimeFrameInfos[k].AudioIndex = flag - 10000;
+                            animeFrameInfo.Effect = EffectType.HitOver;
+                            animeFrameInfo.AudioIndex = flag - 10000;
                         }
                         else
                         {
-                            animeData.AnimeFrameInfos[k].AudioIndex = flag;
+                            animeFrameInfo.AudioIndex = flag;
                         }
+                        animeData.AnimeFrameInfos.Add(animeFrameInfo);
                     }
+                    animeData.FrameCount = (uint) animeData.AnimeFrameInfos.Count;
 
                     if (!animeInfo.AnimeDatas.ContainsKey(animeData.Direction))
                         animeInfo.AnimeDatas.Add(animeData.Direction, new Dictionary<int, AnimeDetail>());
@@ -218,7 +251,11 @@ namespace CrossgateToolkit
             infoFileStream.Close();
             dataFileStream.Close();
             
-            Debug.Log("[CGTool] 加载AnimeInfo - 文件: " + animeInfoFile.Name + " 动画总量: " + DataLength);
+            Debug.Log("[CGTool] 加载AnimeInfo - 文件: [" +
+                      // (Graphic.Flag_HighVersion[Version] ? "H" : "N") + "] [" +
+                      Version + "] " +
+                      animeInfoFile.Name +
+                      " 动画总量: " + DataLength);
         }
         
         //获取动画数据信息
@@ -263,7 +300,9 @@ namespace CrossgateToolkit
                 //载入图档
                 GraphicInfoData graphicInfoData = GraphicInfo.GetGraphicInfoDataByIndex(animeDetail.Version,animeDetail.AnimeFrameInfos[i].GraphicIndex);
                 if (graphicInfoData == null) continue;
-                GraphicDetail graphicDetail = GraphicData.GetGraphicDetail(graphicInfoData, palet);
+                int subPaletIndex = 0;
+                if (animeDetail.IsHighVersion) subPaletIndex = (int)animeDetail.Serial;
+                GraphicDetail graphicDetail = GraphicData.GetGraphicDetail(graphicInfoData, palet, subPaletIndex);
                 if(graphicDetail == null) continue;
                 graphicDetails[i] = graphicDetail;
                 if(graphicDetail.Height > textureHeight) textureHeight = graphicDetail.Height;

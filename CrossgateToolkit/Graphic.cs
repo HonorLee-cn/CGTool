@@ -30,6 +30,9 @@ namespace CrossgateToolkit
         private static List<FilePair> _graphicFilePairs = new List<FilePair>();
         private static List<FilePair> _animeFilePairs = new List<FilePair>();
         
+        // 高版本号标识
+        // public static readonly Dictionary<string,bool> Flag_HighVersion = new Dictionary<string, bool>(); 
+        
         // 初始化
         public static void Init()
         {
@@ -61,10 +64,42 @@ namespace CrossgateToolkit
             }
         }
 
+        // 版本号分析
+        private class VersionInfo
+        {
+            public string Version;
+            public int VersionCode;
+            public string FullVersion;
+        }
+        private static VersionInfo AnalysisVersion(string prefix,string filename)
+        {
+            VersionInfo versionInfo = new VersionInfo();
+            versionInfo.FullVersion = filename.Substring(prefix.Length);
+            string[] versionArr = versionInfo.FullVersion.Split('_');
+            if (String.IsNullOrEmpty(versionArr[0]))
+            {
+                versionArr = versionArr.Skip(1).ToArray();
+            }
+
+            if (int.TryParse(versionArr[0], out int code))
+            {
+                versionInfo.VersionCode = code;
+            }
+            else
+            {
+                versionInfo.Version = versionArr[0].ToUpper();
+                if(int.TryParse(versionArr[^1], out int vcode))
+                {
+                    versionInfo.VersionCode = vcode;
+                }
+            }
+            
+            return versionInfo;
+        }
         // 分析目录,并获取对应配对文件
         private static void AnalysisDirectory(DirectoryInfo directoryInfo)
         {
-            Debug.Log("[CGTool] 开始分析目录: " + directoryInfo.FullName);
+            // Debug.Log("[CGTool] 开始分析目录: " + directoryInfo.FullName);
             string Version = directoryInfo.Name;
             FileInfo[] fileInfos = directoryInfo.GetFiles();
             fileInfos = fileInfos.OrderBy(f => f.Name).ToArray();
@@ -72,14 +107,17 @@ namespace CrossgateToolkit
             {
                 if (!fileInfo.Name.EndsWith(".bin",StringComparison.OrdinalIgnoreCase)) continue;
                 int suffixIndex = fileInfo.Name.LastIndexOf('.');
-                string versionStr;
+                
+                // 解析版本号
+                string filename = fileInfo.Name.Substring(0, suffixIndex);
+                
                 if (fileInfo.Name.StartsWith("graphicinfo", StringComparison.OrdinalIgnoreCase))
                 {
                     // 找到GraphicInfo文件
                     // 获取对应版本号 GraphicInfo(*).bin
-                    versionStr = fileInfo.Name.Substring(11, suffixIndex - 11);
+                    VersionInfo versionInfo = AnalysisVersion("graphicinfo", filename);
                     // 判断是否存在对应graphic文件,忽略大小写
-                    string graphicFileName = "graphic" + versionStr + ".bin";
+                    string graphicFileName = "graphic" + versionInfo.FullVersion + ".bin";
                     FileInfo graphicFileInfo = GetFileInfoByName(fileInfo.Directory, graphicFileName);
                     if (!graphicFileInfo.Exists)
                     {
@@ -89,16 +127,16 @@ namespace CrossgateToolkit
                     {
                         InfoFile = fileInfo,
                         DataFile = graphicFileInfo,
-                        Version = Version
+                        Version = versionInfo.Version ?? Version
                     };
                     _graphicFilePairs.Add(filePair);
                 }else if (fileInfo.Name.StartsWith("animeinfo", StringComparison.OrdinalIgnoreCase))
                 {
                     // 找到AnimeInfo文件
                     // 获取对应版本号 AnimeInfo(*).bin
-                    versionStr = fileInfo.Name.Substring(9, suffixIndex - 9);
+                    VersionInfo versionInfo = AnalysisVersion("animeinfo", filename);
                     // 判断是否存在对应anime文件
-                    string animeFileName = "anime" + versionStr + ".bin";
+                    string animeFileName = "anime" + versionInfo.FullVersion + ".bin";
                     FileInfo animeFileInfo = GetFileInfoByName(fileInfo.Directory, animeFileName);
                     if (!animeFileInfo.Exists)
                     {
@@ -108,7 +146,7 @@ namespace CrossgateToolkit
                     {
                         InfoFile = fileInfo,
                         DataFile = animeFileInfo,
-                        Version = Version
+                        Version = versionInfo.Version ?? Version
                     };
                     _animeFilePairs.Add(filePair);
                 }

@@ -50,8 +50,10 @@ namespace CrossgateToolkit
         // GraphicInfo附加数据
         // GraphicInfo对应Graphic文件流读取器
         public BinaryReader GraphicReader;
+        public byte VERSION_FLAG;
         //已解压的调色板索引
         public int[] UnpackedPaletIndex;
+        public List<Color32> InnerPalet;
     }
 
     public class GraphicInfo:MonoBehaviour
@@ -91,14 +93,12 @@ namespace CrossgateToolkit
                 graphicInfoData.Unknow = fileReader.ReadBytes(4);
                 graphicInfoData.Serial = BitConverter.ToUInt32(fileReader.ReadBytes(4),0);
                 graphicInfoData.GraphicReader = graphicFileReader;
-
+                
                 //建立Index映射表
                 _indexCache[Version][graphicInfoData.Index] = graphicInfoData;
                 
                 //建立Serial映射表
                 if (graphicInfoData.Serial != 0) _cache[graphicInfoData.Serial] = graphicInfoData;
-
-
 
                 // _logger.Write("Index: " + graphicInfoData.Index + " Addr: " + graphicInfoData.Addr + 
                 //               " Width: " + graphicInfoData.Width + 
@@ -111,7 +111,11 @@ namespace CrossgateToolkit
                 //               " Unknow: " + BitConverter.ToString(graphicInfoData.Unknow).Replace("-", ",") +
                 //               " MapSerial: " + graphicInfoData.MapSerial);
             }
-            Debug.Log("[CGTool] 加载GraphicInfo - 文件: " + graphicInfoFile.Name + " 贴图总量: " + DataLength);
+
+            Debug.Log("[CGTool] 加载GraphicInfo - 文件: [" +
+                      // (Graphic.Flag_HighVersion[Version] ? "H" : "N") + "] [" +
+                      Version + "] " +
+                      graphicInfoFile.Name + " 贴图总量: " + DataLength);
         }
         
         //获取GraphicInfoData
