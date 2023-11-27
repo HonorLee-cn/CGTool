@@ -77,14 +77,23 @@ namespace CrossgateToolkit
         // 高版本 - 调色板
         public int Palet;
         // 高版本 - 图像反转
-        public bool Reverse;
+        public AnimeFlag FLAG;
         // 高版本 - 结束标识
-        public byte[] END_FLAG;
+        public byte[] FLAG_END;
         public Dictionary<int,Texture2D> AnimeTextures = new Dictionary<int, Texture2D>();
         // public Texture2D AnimeTexture;
         public List<AnimeFrameInfo> AnimeFrameInfos;
         // public byte[] unknown;
     }
+
+    public class AnimeFlag
+    {
+        public bool REVERSE_X;
+        public bool REVERSE_Y;
+        public bool LOCK_PAL;
+        public bool LIGHT_THROUGH;
+    }
+    
     //动画相关Enum类型
     public class Anime : MonoBehaviour
     {
@@ -196,8 +205,17 @@ namespace CrossgateToolkit
                     {
                         animeData.IsHighVersion = true;
                         animeData.Palet = dataFileReader.ReadUInt16();
-                        animeData.Reverse = dataFileReader.ReadUInt16() % 2 == 1;
-                        animeData.END_FLAG = dataFileReader.ReadBytes(4);
+                        int flag = dataFileReader.ReadUInt16();
+                        if (flag > 0)
+                        {
+                            animeData.FLAG = new AnimeFlag();
+                            if ((flag & 1) == (1 << 0)) animeData.FLAG.REVERSE_X = true;
+                            if ((flag & 2) == (1 << 1)) animeData.FLAG.REVERSE_Y = true;
+                            if ((flag & 4) == (1 << 2)) animeData.FLAG.LOCK_PAL = true;
+                            if ((flag & 8) == (1 << 3)) animeData.FLAG.LIGHT_THROUGH = true;    
+                        }
+                        
+                        animeData.FLAG_END = dataFileReader.ReadBytes(4);
                     }
                     animeData.AnimeFrameInfos = new List<AnimeFrameInfo>();
                     

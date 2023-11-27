@@ -503,21 +503,34 @@ namespace CrossgateToolkit
             float width = _frames[_currentFrame].Sprite.rect.width * 1f;
             float height = _frames[_currentFrame].Sprite.rect.height * 1f;
 
+            Vector3 pos = Vector3.zero;
+            pos.x = _frames[_currentFrame].GraphicInfo.OffsetX;
+            pos.y = -_frames[_currentFrame].GraphicInfo.OffsetY;
+            
             if (isRenderByImage)
             {
                 _imageRenderer.sprite = _frames[_currentFrame].Sprite;
                 _imageRenderer.SetNativeSize();
-                if (_currentAnime.AnimeDetail.Reverse)
+                if (_currentAnime.AnimeDetail.FLAG!=null)
                 {
-                    _imageRenderer.transform.localScale = new Vector3(-1, 1, 1);
+                    if (_currentAnime.AnimeDetail.FLAG.REVERSE_X)
+                    {
+                        _imageRenderer.transform.localScale = new Vector3(-1, 1, 1);
+                        pos.x = -pos.x;
+                    }
+
+                    if (_currentAnime.AnimeDetail.FLAG.REVERSE_Y)
+                    {
+                        _imageRenderer.transform.localScale = new Vector3(1, -1, 1);
+                        pos.y = -pos.y;
+                    }
+                    
                 }
                 else
                 {
                     _imageRenderer.transform.localScale = new Vector3(1, 1, 1);
                 }
-                Vector3 pos = Vector3.zero;
-                pos.x = _frames[_currentFrame].GraphicInfo.OffsetX;
-                pos.y = -_frames[_currentFrame].GraphicInfo.OffsetY;
+                
                 _rectTransform.localPosition = pos;
                 _rectTransform.pivot = new Vector2(0f,1f);
             }
@@ -527,13 +540,22 @@ namespace CrossgateToolkit
                 _rectTransform.sizeDelta = new Vector2(width, height);
                 _spriteRenderer.size = new Vector2(width, height);
                 _rectTransform.pivot = new Vector2(0.5f,0f);
-                if (_currentAnime.AnimeDetail.Reverse)
+                if (_currentAnime.AnimeDetail.FLAG!=null)
                 {
-                    _spriteRenderer.flipX = true;
+                    if (_currentAnime.AnimeDetail.FLAG.REVERSE_X)
+                    {
+                        _spriteRenderer.flipX = true;
+                    }
+                    
+                    if (_currentAnime.AnimeDetail.FLAG.REVERSE_Y)
+                    {
+                        _spriteRenderer.flipY = true;
+                    }
                 }
                 else
                 {
                     _spriteRenderer.flipX = false;
+                    _spriteRenderer.flipY = false;
                 }
                 _rectTransform.localPosition = Vector3.zero;
             }
