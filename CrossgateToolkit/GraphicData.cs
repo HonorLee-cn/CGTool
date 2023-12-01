@@ -104,7 +104,7 @@ namespace CrossgateToolkit
 
             // RGBA4444 减少内存占用
             texture2D = new Texture2D((int) graphicInfoData.Width, (int) graphicInfoData.Height,
-                TextureFormat.RGBA4444, false, true);
+                TextureFormat.RGBA4444, false, false);
             // 固定点过滤
             texture2D.filterMode = FilterMode.Point;
             texture2D.SetPixels32(pixels.ToArray());
