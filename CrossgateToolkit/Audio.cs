@@ -54,7 +54,7 @@ namespace CrossgateToolkit
                         audioClip = Resources.Load<AudioClip>(path + "/" + audioName);
                         if (audioClip == null) return;
                         
-                        dic.Add(id, audioClip);
+                        dic[id] = audioClip;
                         _playAudio(audioSource, audioClip);
                     }
                     else
@@ -69,7 +69,7 @@ namespace CrossgateToolkit
                             {
                                 if (loadedAudioClip != null)
                                 {
-                                    dic.Add(id, loadedAudioClip);
+                                    dic[id] = loadedAudioClip;
                                     _playAudio(audioSource, loadedAudioClip);
                                 }
                             }));
