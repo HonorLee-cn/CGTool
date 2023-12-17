@@ -179,19 +179,19 @@ namespace CrossgateToolkit
         }
         
         // 获取图档数据
-        public static GraphicDetail GetGraphicDetail(uint serial,int palet = 0)
+        public static GraphicDetail GetGraphicDetail(uint serial,int palet = 0,bool linerFilter = false)
         {
             GraphicInfoData graphicInfoData = GraphicInfo.GetGraphicInfoData(serial);
             if (graphicInfoData == null) return null;
-            return GraphicData.GetGraphicDetail(graphicInfoData, palet);
+            return GraphicData.GetGraphicDetail(graphicInfoData, palet, 0, linerFilter);
         }
         
         // 获取图档数据
-        public static GraphicDetail GetGraphicDetailByIndex(string Version,uint index,int palet = 0)
+        public static GraphicDetail GetGraphicDetailByIndex(string Version,uint index,int palet = 0,bool linerFilter = false)
         {
             GraphicInfoData graphicInfoData = GraphicInfo.GetGraphicInfoDataByIndex(Version, index);
             if (graphicInfoData == null) return null;
-            return GraphicData.GetGraphicDetail(graphicInfoData, palet);
+            return GraphicData.GetGraphicDetail(graphicInfoData, palet, 0, linerFilter);
         }
     }
 }
