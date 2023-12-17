@@ -40,7 +40,7 @@ namespace CrossgateToolkit
             Dictionary<int,AudioClip> dic = type == Type.BGM ? _bgmDic : _effectDic;
             if (dic.TryGetValue(id, out audioClip))
             {
-                return;
+                _playAudio(audioSource, audioClip);
             }
             else
             {

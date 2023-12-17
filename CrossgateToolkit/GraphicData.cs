@@ -48,41 +48,43 @@ namespace CrossgateToolkit
     // 图档数据
     public static class GraphicData
     {
-        // // 图档缓存  Serial -> Palet -> GraphicDetail
-        // public static Dictionary<uint,Dictionary<int,GraphicDetail>> _cache = new Dictionary<uint, Dictionary<int, GraphicDetail>>();
-        //
-        // // 图档索引缓存 Index -> Palet -> GraphicDetail
-        // public static Dictionary<uint,Dictionary<int,GraphicDetail>> _indexCache = new Dictionary<uint, Dictionary<int, GraphicDetail>>();
-        
+        // 常规图档缓存
         public static Dictionary<GraphicInfoData,Dictionary<int,GraphicDetail>> _cache = new Dictionary<GraphicInfoData, Dictionary<int, GraphicDetail>>();
+        
+        // 线性图档缓存
+        public static Dictionary<GraphicInfoData,Dictionary<int,GraphicDetail>> _linearCache = new Dictionary<GraphicInfoData, Dictionary<int, GraphicDetail>>();
+        
         // 获取图档
-        public static GraphicDetail GetGraphicDetail(GraphicInfoData graphicInfoData, int palet = 0,int subPalet = 0)
+        public static GraphicDetail GetGraphicDetail(GraphicInfoData graphicInfoData, int palet = 0,int subPalet = 0,bool asLinear = false)
         {
             GraphicDetail graphicDetail = null;
-            if (_cache.ContainsKey(graphicInfoData))
+
+            var checkCache = asLinear ? _linearCache : _cache;
+            
+            if (checkCache.ContainsKey(graphicInfoData))
             {
-                if (_cache[graphicInfoData].ContainsKey(palet))
+                if (checkCache[graphicInfoData].ContainsKey(palet))
                 {
-                    graphicDetail = _cache[graphicInfoData][palet];
+                    graphicDetail = checkCache[graphicInfoData][palet];
                 }
                 else
                 {
-                    graphicDetail = _loadGraphicDetail(graphicInfoData, palet, subPalet);
-                    _cache[graphicInfoData].Add(palet, graphicDetail);
+                    graphicDetail = _loadGraphicDetail(graphicInfoData, palet, subPalet, asLinear);
+                    checkCache[graphicInfoData].Add(palet, graphicDetail);
                 }
             }
             else
             {
-                graphicDetail = _loadGraphicDetail(graphicInfoData, palet, subPalet);
-                _cache.Add(graphicInfoData, new Dictionary<int, GraphicDetail>());
-                _cache[graphicInfoData].Add(palet, graphicDetail);
+                graphicDetail = _loadGraphicDetail(graphicInfoData, palet, subPalet, asLinear);
+                checkCache.Add(graphicInfoData, new Dictionary<int, GraphicDetail>());
+                checkCache[graphicInfoData].Add(palet, graphicDetail);
             }
             
             return graphicDetail;
         }
         
         // 解析图档
-        private static GraphicDetail _loadGraphicDetail(GraphicInfoData graphicInfoData,int palet = 0,int subPalet = 0)
+        private static GraphicDetail _loadGraphicDetail(GraphicInfoData graphicInfoData,int palet = 0,int subPalet = 0,bool asLinear = false)
         {
             GraphicDetail graphicDetail = new GraphicDetail();
             
@@ -104,9 +106,10 @@ namespace CrossgateToolkit
 
             // RGBA4444 减少内存占用
             texture2D = new Texture2D((int) graphicInfoData.Width, (int) graphicInfoData.Height,
-                TextureFormat.RGBA4444, false, false);
+                TextureFormat.RGBA4444, false, asLinear);
             // 固定点过滤
-            texture2D.filterMode = FilterMode.Point;
+            if (asLinear) texture2D.filterMode = FilterMode.Bilinear;
+            else texture2D.filterMode = FilterMode.Point;
             texture2D.SetPixels32(pixels.ToArray());
             // texture2D.LoadRawTextureData(rawTextureData);
             texture2D.Apply();
@@ -140,107 +143,6 @@ namespace CrossgateToolkit
             public int MaxWidth;
             public List<BatchData> BatchDatas = new List<BatchData>();
             public List<GraphicInfoData> GraphicInfoDatas = new List<GraphicInfoData>();
-        }
-        
-        //预备地图缓存
-        [Obsolete("该方法已废弃,请使用BakeGraphics方法")]
-        public static Dictionary<uint, GraphicDetail> BakeAsGround(List<GraphicInfoData> groundInfos,int palet=0)
-        {
-            
-            Dictionary<uint, GraphicDetail> graphicDataDic = new Dictionary<uint, GraphicDetail>();
-            // _mapSpriteMap[MapID].Add(PaletIndex, graphicDataDic);
-            
-            List<BatchData> batchDatas = new List<BatchData>();
-            Texture2D texture2D = null;
-            
-            for (var i = 0; i < groundInfos.Count; i++)
-            {
-                //每1344个图像合并一次,即不超过2048*2048尺寸
-                if (i % 1344 == 0)
-                {
-                    //合并
-                    if (i != 0) Combine(texture2D, batchDatas);
-                    
-                    //清空
-                    batchDatas.Clear();
-                    int height = 2048;
-
-                    if (i + 1344 > groundInfos.Count-1)
-                    {
-                        height = Mathf.CeilToInt((groundInfos.Count - i) / 32f) * 48;
-                    }
-                    texture2D = new Texture2D(2048, height, TextureFormat.RGBA4444, false, true);
-                    texture2D.filterMode = FilterMode.Point;
-                    //默认填充全透明
-                    Color32[] colors = Enumerable.Repeat(new Color32(0, 0, 0, 0), 2048 * height).ToArray();
-                    texture2D.SetPixels32(colors);
-                }
-                
-                GraphicInfoData graphicInfoData = groundInfos[i];
-                GraphicDetail graphicData = GetGraphicDetail(graphicInfoData, palet);
-                
-                int x = i % 32 * 64;
-                int y = i / 32 * 48;
-
-                if(graphicData!=null && graphicData.Sprite!=null)
-                {
-                    Color32[] pixels = graphicData.Sprite.texture.GetPixels32();
-                    texture2D.SetPixels32(x, y, (int) graphicInfoData.Width, (int) graphicInfoData.Height,
-                        pixels.ToArray());    
-                }
-                BatchData batchData = new BatchData();
-                
-
-                batchData.BatchOffsetX = x;
-                batchData.BatchOffsetY = y;
-                batchData.GraphicDetail = graphicData;
-
-                batchDatas.Add(batchData);
-            }
-            
-            //最后一次合并
-            if (batchDatas.Count > 0)
-            {
-                Combine(texture2D, batchDatas);
-                batchDatas.Clear();
-            }
-
-            void Combine(Texture2D texture2D,List<BatchData> batchDatas)
-            {
-                texture2D.Apply();
-                for (var i = 0; i < batchDatas.Count; i++)
-                {
-                    GraphicDetail graphicDataPiece = batchDatas[i].GraphicDetail;
-                    //直接通过Texture2D做偏移,并转为Sprite的偏移量
-                    Vector2 offset = new Vector2(0f, 1f);
-                    offset.x += -(graphicDataPiece.OffsetX * 1f) / graphicDataPiece.Width;
-                    offset.y -= (-graphicDataPiece.OffsetY * 1f) / graphicDataPiece.Height;
-                        
-                    int X = i % 32 * 64;
-                    int Y = i / 32 * 48;
-
-                    Sprite sprite = Sprite.Create(texture2D,
-                        new Rect(X, Y, (int)graphicDataPiece.Width, (int)graphicDataPiece.Height), offset, 1, 1,
-                        SpriteMeshType.FullRect);
-                    
-                    GraphicDetail graphicData = new GraphicDetail()
-                    {
-                        Index = graphicDataPiece.Index,
-                        Serial = graphicDataPiece.Serial,
-                        Width = graphicDataPiece.Width,
-                        Height = graphicDataPiece.Height,
-                        OffsetX = graphicDataPiece.OffsetX,
-                        OffsetY = graphicDataPiece.OffsetY,
-                        Palet = graphicDataPiece.Palet,
-                        Sprite = sprite,
-                        PrimaryColor = graphicDataPiece.PrimaryColor
-                    };
-
-                    graphicDataDic.Add(graphicData.Serial, graphicData);
-                }
-            }
-
-            return graphicDataDic;
         }
         
         /// <summary>

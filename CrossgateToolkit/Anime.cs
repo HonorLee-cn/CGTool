@@ -53,7 +53,8 @@ namespace CrossgateToolkit
         //GraphicInfo;
         public GraphicInfoData GraphicInfo;
         //动画Sprite
-        public Dictionary<int,Sprite> AnimeSprites = new Dictionary<int, Sprite>();
+        // public Dictionary<int,Sprite> AnimeSprites = new Dictionary<int, Sprite>();
+        public Dictionary<int,Dictionary<bool,Sprite>> AnimeSprites = new Dictionary<int, Dictionary<bool, Sprite>>();
     }
 
     //动画数据
@@ -80,7 +81,8 @@ namespace CrossgateToolkit
         public AnimeFlag FLAG;
         // 高版本 - 结束标识
         public byte[] FLAG_END;
-        public Dictionary<int,Texture2D> AnimeTextures = new Dictionary<int, Texture2D>();
+        // public Dictionary<int,Texture2D> AnimeTextures = new Dictionary<int, Texture2D>();
+        public Dictionary<int,Dictionary<bool,Texture2D>> AnimeTextures = new Dictionary<int, Dictionary<bool, Texture2D>>();
         // public Texture2D AnimeTexture;
         public List<AnimeFrameInfo> AnimeFrameInfos;
         // public byte[] unknown;
@@ -306,9 +308,12 @@ namespace CrossgateToolkit
         }
 
         //预处理动画图形合批烘焙
-        public static void BakeAnimeFrames(AnimeDetail animeDetail,int palet = 0)
+        public static void BakeAnimeFrames(AnimeDetail animeDetail,int palet = 0, bool linear = false)
         {
-            if(animeDetail.AnimeTextures.ContainsKey(palet)) return;
+            if (animeDetail.AnimeTextures.ContainsKey(palet))
+            {
+                if(animeDetail.AnimeTextures[palet].ContainsKey(linear)) return;
+            }
             //所有帧的图形数据
             GraphicDetail[] graphicDetails = new GraphicDetail[animeDetail.FrameCount];
             
@@ -324,7 +329,7 @@ namespace CrossgateToolkit
                 if (graphicInfoData == null) continue;
                 int subPaletIndex = 0;
                 if (animeDetail.IsHighVersion) subPaletIndex = (int)animeDetail.Serial;
-                GraphicDetail graphicDetail = GraphicData.GetGraphicDetail(graphicInfoData, palet, subPaletIndex);
+                GraphicDetail graphicDetail = GraphicData.GetGraphicDetail(graphicInfoData, palet, subPaletIndex, linear);
                 if(graphicDetail == null) continue;
                 graphicDetails[i] = graphicDetail;
                 if(graphicDetail.Height > textureHeight) textureHeight = graphicDetail.Height;
@@ -336,8 +341,9 @@ namespace CrossgateToolkit
                 animeDetail.AnimeFrameInfos[i].GraphicInfo = graphicInfoData;
             }
             //合并图档
-            Texture2D texture2dMix = new Texture2D((int) textureWidth, (int) textureHeight, TextureFormat.RGBA4444, false,false);
-            texture2dMix.filterMode = FilterMode.Point;
+            Texture2D texture2dMix = new Texture2D((int) textureWidth, (int) textureHeight, TextureFormat.RGBA4444, false,linear);
+            if(linear) texture2dMix.filterMode = FilterMode.Bilinear;
+            else texture2dMix.filterMode = FilterMode.Point;
             Color32 transparentColor = new Color32(0, 0, 0, 0);
             Color32[] transparentColors = new Color32[texture2dMix.width * texture2dMix.height];
             for (var i = 0; i < transparentColors.Length; i++)
@@ -358,7 +364,9 @@ namespace CrossgateToolkit
             }
             texture2dMix.Apply();
             
-            animeDetail.AnimeTextures.Add(palet,texture2dMix);
+            if(!animeDetail.AnimeTextures.ContainsKey(palet)) animeDetail.AnimeTextures.Add(palet,new Dictionary<bool, Texture2D>());
+
+            animeDetail.AnimeTextures[palet].Add(linear, texture2dMix);
             
             //创建动画每帧Sprite
             offsetX = 0;
@@ -373,7 +381,8 @@ namespace CrossgateToolkit
                         animeDetail.AnimeFrameInfos[l].Width, animeDetail.AnimeFrameInfos[l].Height),
                     pivot, 1, 1, SpriteMeshType.FullRect);
                 offsetX += animeDetail.AnimeFrameInfos[l].Width + 5;
-                animeFrameInfo.AnimeSprites.Add(palet, sprite);
+                if(!animeFrameInfo.AnimeSprites.ContainsKey(palet)) animeFrameInfo.AnimeSprites.Add(palet,new Dictionary<bool, Sprite>());
+                animeFrameInfo.AnimeSprites[palet].Add(linear, sprite);
             }
             
         }

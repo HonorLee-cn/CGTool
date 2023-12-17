@@ -10,6 +10,7 @@
 
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 namespace CrossgateToolkit
@@ -58,15 +59,15 @@ namespace CrossgateToolkit
             public float FrameRate;
             public AnimeDetail AnimeDetail;
             public AnimeCallback onFinishCallback;
+            public int CurrentFrame = 0;
+            public bool KeepFrame = false;
         }
-        
-        
         
         //当前播放
         private uint _currentSerial;
         private AnimeOption _currentAnime;
         private AnimeFrame[] _frames;
-        private int _currentFrame;
+        // private int _currentFrame;
         
         //是否播放
         private bool isPlayable;
@@ -82,9 +83,12 @@ namespace CrossgateToolkit
         //绑定渲染对象
         [SerializeField,Header("Image渲染")] public bool isRenderByImage = false;
         [SerializeField,Header("序列帧合批")] public bool isFrameBatch = false;
+        [SerializeField,Header("线性过滤")] public bool isLinearFilter = false;
         [Header("序列帧Texture")] public Texture2D frameTexture;
+        
         private SpriteRenderer _spriteRenderer;
         private Image _imageRenderer;
+        
         private int _paletIndex = 0;
         public int PaletIndex
         {
@@ -114,8 +118,8 @@ namespace CrossgateToolkit
         {
             get
             {
-                float offsetX = -_frames[_currentFrame].AnimeFrameInfo.OffsetX;
-                float offsetY = _frames[_currentFrame].AnimeFrameInfo.OffsetY;
+                float offsetX = -_frames[_currentAnime.CurrentFrame].AnimeFrameInfo.OffsetX;
+                float offsetY = _frames[_currentAnime.CurrentFrame].AnimeFrameInfo.OffsetY;
                 return new Vector2(offsetX, offsetY);
             }
         }
@@ -131,6 +135,8 @@ namespace CrossgateToolkit
             if(_imageRenderer == null) _imageRenderer = gameObject.AddComponent<Image>();
             if(_spriteRenderer == null) _spriteRenderer = gameObject.AddComponent<SpriteRenderer>();
             if(_rectTransform == null) _rectTransform = gameObject.AddComponent<RectTransform>();
+            
+            gameObject.SetActive(false);
         }
 
         private void Start()
@@ -167,6 +173,11 @@ namespace CrossgateToolkit
             get => _currentSerial;
             set
             {
+                if (value == 0)
+                {
+                    Stop();
+                    return;
+                }
                 Anime.DirectionType direction =
                     _currentAnime?.Direction ?? Anime.DirectionType.North;
                 Anime.ActionType actionType = _currentAnime?.actionType ?? Anime.ActionType.Stand;
@@ -186,6 +197,19 @@ namespace CrossgateToolkit
                 if (_currentAnime != null)
                 {
                     _currentAnime.playType = value;
+                }
+            }
+        }
+        
+        // 动态调整播放回调
+        public AnimeCallback OnFinishCallback
+        {
+            get => _currentAnime?.onFinishCallback;
+            set
+            {
+                if (_currentAnime != null)
+                {
+                    _currentAnime.onFinishCallback = value;
                 }
             }
         }
@@ -312,7 +336,7 @@ namespace CrossgateToolkit
 
             if (isFrameBatch)
             {
-                Anime.BakeAnimeFrames(animeOption.AnimeDetail, _paletIndex);
+                Anime.BakeAnimeFrames(animeOption.AnimeDetail, _paletIndex, isLinearFilter);
                 //获取动画帧数据
                 for (int i = 0; i < animeOption.AnimeDetail.AnimeFrameInfos.Count; i++)
                 {
@@ -322,7 +346,7 @@ namespace CrossgateToolkit
                     frames[i] = new AnimeFrame();
                     frames[i].Index = i;
                     frames[i].GraphicInfo = animeOption.AnimeDetail.AnimeFrameInfos[i].GraphicInfo;
-                    frames[i].Sprite = animeOption.AnimeDetail.AnimeFrameInfos[i].AnimeSprites[_paletIndex];
+                    frames[i].Sprite = animeOption.AnimeDetail.AnimeFrameInfos[i].AnimeSprites[_paletIndex][isLinearFilter];
                     frames[i].AnimeFrameInfo = animeOption.AnimeDetail.AnimeFrameInfos[i];
                 }
             }
@@ -344,7 +368,7 @@ namespace CrossgateToolkit
                     int subPaletIndex = 0;
                     if (animeOption.AnimeDetail.IsHighVersion) subPaletIndex = (int)animeOption.AnimeDetail.Serial;
                     GraphicDetail graphicData =
-                        GraphicData.GetGraphicDetail(graphicInfoData, _paletIndex, subPaletIndex);
+                        GraphicData.GetGraphicDetail(graphicInfoData, _paletIndex, subPaletIndex, isLinearFilter);
                     if (graphicData == null)
                     {
                         Debug.Log("GraphicData Serial:" +
@@ -364,7 +388,7 @@ namespace CrossgateToolkit
 
             _currentAnime = animeOption;
             _frames = frames;
-            _currentFrame = -1;
+            // _currentAnime.CurrentFrame = _currentAnime.CurrentFrame;
             isPlayable = true;
             gameObject.SetActive(true);
             UpdateFrame();
@@ -381,7 +405,7 @@ namespace CrossgateToolkit
             isPlayable = false;
             _currentAnime = null;
             _frames = null;
-            _currentFrame = -1;
+            _currentAnime.CurrentFrame = 0;
             gameObject.SetActive(false);
         }
 
@@ -450,6 +474,18 @@ namespace CrossgateToolkit
             return nextPlay(_currentSerial, Direction, ActionType, playType, Speed, onFinishCallback);
         }
         
+        // 保持当前帧并切换动画方向(特殊情况如被暴击或击飞后保持受伤帧旋转)
+        public void changeDirectionKeepFrame(Anime.DirectionType directionType)
+        {
+            if (directionType == _currentAnime.Direction || directionType == Anime.DirectionType.NULL) return;
+            int currentFrame = _currentAnime.CurrentFrame;
+            _currentAnime = CreateAnimeOption(_currentAnime.AnimeSerial, directionType, _currentAnime.actionType,
+                _currentAnime.playType, _currentAnime.Speed, _currentAnime.onFinishCallback);
+            _currentAnime.CurrentFrame = currentFrame;
+            _currentAnime.KeepFrame = true;
+            _play(_currentAnime);
+        }
+        
         //更新计算
         private void Update()
         {
@@ -463,16 +499,14 @@ namespace CrossgateToolkit
             _delay = 0;
             if (!isPlayable || _frames.Length == 0) return;
             
-            _currentFrame++;
-            
             //动画结束
-            if (_currentFrame >= _currentAnime.AnimeDetail.FrameCount)
+            if (_currentAnime.CurrentFrame >= _currentAnime.AnimeDetail.FrameCount)
             {
                 if(_currentAnime.onFinishCallback!=null) _currentAnime.onFinishCallback(_currentAnime.actionType);
                 //循环播放
                 if (_currentAnime.playType == Anime.PlayType.Loop)
                 {
-                    _currentFrame = 0;
+                    _currentAnime.CurrentFrame = 0;
                 }else if (_currentAnime.playType == Anime.PlayType.Once || _currentAnime.playType == Anime.PlayType.OnceAndDestroy)
                 {
                     if (_currentAnime.playType == Anime.PlayType.OnceAndDestroy)
@@ -480,7 +514,7 @@ namespace CrossgateToolkit
                         _spriteRenderer.sprite = null;
                         _imageRenderer.sprite = null;
                         _rectTransform.sizeDelta = Vector2.zero;
-                        // gameObject.SetActive(false);
+                        gameObject.SetActive(false);
                     }
                     //播放下一个动画
                     if(_animeQueue.Count>0)
@@ -490,26 +524,33 @@ namespace CrossgateToolkit
                         return;
                     }else
                     {
-                        isPlayable = false;
-                        return;
+                        if (_currentAnime.KeepFrame)
+                        {
+                            _currentAnime.CurrentFrame--;
+                        }
+                        else
+                        {
+                            isPlayable = false;
+                            return;
+                        }
                     }
                 }
             }
             
             //问题帧自动跳过
-            if (_currentFrame<_frames.Length && _frames[_currentFrame] == null) return;
+            if (_currentAnime.CurrentFrame<_frames.Length && _frames[_currentAnime.CurrentFrame] == null) return;
             
             //根据当前帧Sprite动态调整对象大小
-            float width = _frames[_currentFrame].Sprite.rect.width * 1f;
-            float height = _frames[_currentFrame].Sprite.rect.height * 1f;
+            float width = _frames[_currentAnime.CurrentFrame].Sprite.rect.width * 1f;
+            float height = _frames[_currentAnime.CurrentFrame].Sprite.rect.height * 1f;
 
             Vector3 pos = Vector3.zero;
-            pos.x = _frames[_currentFrame].GraphicInfo.OffsetX;
-            pos.y = -_frames[_currentFrame].GraphicInfo.OffsetY;
+            pos.x = _frames[_currentAnime.CurrentFrame].GraphicInfo.OffsetX;
+            pos.y = -_frames[_currentAnime.CurrentFrame].GraphicInfo.OffsetY;
             
             if (isRenderByImage)
             {
-                _imageRenderer.sprite = _frames[_currentFrame].Sprite;
+                _imageRenderer.sprite = _frames[_currentAnime.CurrentFrame].Sprite;
                 _imageRenderer.SetNativeSize();
                 if (_currentAnime.AnimeDetail.FLAG!=null)
                 {
@@ -536,7 +577,7 @@ namespace CrossgateToolkit
             }
             else
             {
-                _spriteRenderer.sprite = _frames[_currentFrame].Sprite;
+                _spriteRenderer.sprite = _frames[_currentAnime.CurrentFrame].Sprite;
                 _rectTransform.sizeDelta = new Vector2(width, height);
                 _spriteRenderer.size = new Vector2(width, height);
                 _rectTransform.pivot = new Vector2(0.5f,0f);
@@ -559,14 +600,16 @@ namespace CrossgateToolkit
                 }
                 _rectTransform.localPosition = Vector3.zero;
             }
-            frameTexture = _frames[_currentFrame].Sprite.texture;
+            frameTexture = _frames[_currentAnime.CurrentFrame].Sprite.texture;
             
             _timer = Time.time * 1000;
             
             //动画事件帧监听
-            if(_frames[_currentFrame].AnimeFrameInfo.Effect >0 && onEffectListener!=null) onEffectListener(_frames[_currentFrame].AnimeFrameInfo.Effect);
+            if(_frames[_currentAnime.CurrentFrame].AnimeFrameInfo.Effect >0 && onEffectListener!=null) onEffectListener(_frames[_currentAnime.CurrentFrame].AnimeFrameInfo.Effect);
             //音频事件帧监听
-            if(_frames[_currentFrame].AnimeFrameInfo.AudioIndex >0 && onAudioListener!=null) onAudioListener(_frames[_currentFrame].AnimeFrameInfo.AudioIndex);
+            if(_frames[_currentAnime.CurrentFrame].AnimeFrameInfo.AudioIndex >0 && onAudioListener!=null) onAudioListener(_frames[_currentAnime.CurrentFrame].AnimeFrameInfo.AudioIndex);
+            
+            _currentAnime.CurrentFrame++;
         }
     }
 }

@@ -147,7 +147,6 @@ namespace CrossgateToolkit
                     VersionInfo versionInfo = AnalysisVersion("animeinfo", fileInfo);
                     // 判断是否存在对应anime文件
                     string animeFileName = "anime" + versionInfo.FullVersion + ".bin";
-                    Debug.Log(animeFileName);
                     FileInfo animeFileInfo = GetFileInfoByName(fileInfo.Directory, animeFileName);
                     if (!animeFileInfo.Exists)
                     {
@@ -183,6 +182,7 @@ namespace CrossgateToolkit
         public static GraphicDetail GetGraphicDetail(uint serial,int palet = 0)
         {
             GraphicInfoData graphicInfoData = GraphicInfo.GetGraphicInfoData(serial);
+            if (graphicInfoData == null) return null;
             return GraphicData.GetGraphicDetail(graphicInfoData, palet);
         }
         
@@ -190,6 +190,7 @@ namespace CrossgateToolkit
         public static GraphicDetail GetGraphicDetailByIndex(string Version,uint index,int palet = 0)
         {
             GraphicInfoData graphicInfoData = GraphicInfo.GetGraphicInfoDataByIndex(Version, index);
+            if (graphicInfoData == null) return null;
             return GraphicData.GetGraphicDetail(graphicInfoData, palet);
         }
     }
