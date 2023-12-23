@@ -316,6 +316,13 @@ player.Stop();
 
 
 ## 4、更新日志
+### v 2.6
+> `UPD` 修改了Anime初始化过程，将预载全部动画帧修改为读取时加载,减少初始化时间
+>
+> `UPD` Anime微调部分逻辑处理,并<font color="red">将动作类型中```Stand```调整为```Idle```</font>
+>
+> `FIX` Anime修正回调和nextplay链式调用队列控制
+
 ### v 2.5
 > `FIX` Audio播放代码忘了补充
 >
