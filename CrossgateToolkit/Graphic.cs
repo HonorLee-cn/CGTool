@@ -39,6 +39,7 @@ namespace CrossgateToolkit
             // 解析Bin文件目录结构
             if(!Directory.Exists(CGTool.PATH.BIN)) throw new Exception("图档目录不存在,请检查CGTool中是否配置相应PATH路径");
 
+            float time = Time.realtimeSinceStartup;
             // 整理目录结构,生成对应待处理文件列表
             List<DirectoryInfo> _directorys = new List<DirectoryInfo>();
             _directorys.Add(new DirectoryInfo(CGTool.PATH.BIN));
@@ -62,6 +63,8 @@ namespace CrossgateToolkit
             {
                 Anime.Init(animeFilePair.Version, animeFilePair.InfoFile, animeFilePair.DataFile);
             }
+            
+            Debug.Log("[CGTool] 图档资源加载完毕,耗时: " + (Time.realtimeSinceStartup - time) + "s");
         }
 
         // 版本号分析

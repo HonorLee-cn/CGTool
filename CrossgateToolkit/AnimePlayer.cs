@@ -10,7 +10,6 @@
 
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 namespace CrossgateToolkit
@@ -59,6 +58,7 @@ namespace CrossgateToolkit
             public float FrameRate;
             public AnimeDetail AnimeDetail;
             public AnimeCallback onFinishCallback;
+            public AnimeEffectListener onEffectListener;
             public int CurrentFrame = 0;
             public bool KeepFrame = false;
         }
@@ -71,9 +71,25 @@ namespace CrossgateToolkit
         
         //是否播放
         private bool isPlayable;
+        // private bool isPlayable
+        // {
+        //     get => _isPlayable;
+        //     set
+        //     {
+        //         _isPlayable = value;
+        //         if (_isPlayable)
+        //         {
+        //             _timer = Time.time * 1000;
+        //         }
+        //         else
+        //         {
+        //             Debug.Log("set isPlayable  " + isPlayable + "  "+_currentAnime?.actionType);
+        //         }
+        //     }
+        // }
         
         //待播放队列
-        private Queue<AnimeOption> _animeQueue = new Queue<AnimeOption>();
+        private readonly List<AnimeOption> _animeQueue = new List<AnimeOption>();
         
         //计时器
         private float _timer;
@@ -102,11 +118,9 @@ namespace CrossgateToolkit
         
         //绑定RectTransform
         private RectTransform _rectTransform;
-        //绑定BoxCollider2D(可选)
-        private BoxCollider2D _boxCollider2D;
         
         //动画动作帧监听
-        public AnimeEffectListener onEffectListener;
+        // public AnimeEffectListener onEffectListener;
         public AnimeAudioListener onAudioListener;
         //鼠标移入事件监听
         public MouseListener onMouseEnterListener;
@@ -147,13 +161,13 @@ namespace CrossgateToolkit
         //鼠标移入监听
         private void OnMouseEnter()
         {
-            if(onMouseEnterListener!=null) onMouseEnterListener(this);
+            onMouseEnterListener?.Invoke(this);
         }
 
         //鼠标移出监听
         private void OnMouseExit()
         {
-            if(onMouseExitListener!=null) onMouseExitListener(this);
+            onMouseExitListener?.Invoke(this);
         }
         
         // 使用Image模式渲染
@@ -180,11 +194,12 @@ namespace CrossgateToolkit
                 }
                 Anime.DirectionType direction =
                     _currentAnime?.Direction ?? Anime.DirectionType.North;
-                Anime.ActionType actionType = _currentAnime?.actionType ?? Anime.ActionType.Stand;
+                Anime.ActionType actionType = _currentAnime?.actionType ?? Anime.ActionType.Idle;
                 Anime.PlayType playType = _currentAnime?.playType ?? Anime.PlayType.Loop;
                 float speed = _currentAnime?.Speed ?? 1f;
                 AnimeCallback onFinishCallback = _currentAnime?.onFinishCallback;
-                play(value, direction, actionType, playType, speed, onFinishCallback);
+                AnimeEffectListener onEffectListener = _currentAnime?.onEffectListener;
+                play(value, direction, actionType, playType, speed, onEffectListener,onFinishCallback);
             }
         }
         
@@ -237,28 +252,23 @@ namespace CrossgateToolkit
         /// <param name="ActionType">动画动作</param>
         /// <param name="PlayType">播放类型</param>
         /// <param name="Speed">播放速度，以 1s 为基准，根据动画帧率计算实际播放周期时长</param>
+        /// <param name="onEffectListener">动画动作帧监听</param>
         /// <param name="onFinishCallback">动画结束回调</param>
         /// <returns>AnimePlayer</returns>
-        public AnimePlayer play(uint Serial, Anime.DirectionType Direction = Anime.DirectionType.North,
-            Anime.ActionType actionType = Anime.ActionType.Stand, Anime.PlayType playType = Anime.PlayType.Once,
-            float Speed = 1f, AnimeCallback onFinishCallback = null)
+        public AnimePlayer play(uint serial, Anime.DirectionType Direction = Anime.DirectionType.North, 
+            Anime.ActionType actionType = Anime.ActionType.Idle, Anime.PlayType playType = Anime.PlayType.Once,
+            float Speed = 1f,AnimeEffectListener onEffectListener = null,AnimeCallback onFinishCallback = null)
         {
-            if (_spriteRenderer == null)
-            {
-                // Debug.Log("AnimePlayer:SpriteRenderer is null");
-                return this;
-            }
-            AnimeOption animeOption = CreateAnimeOption(Serial, Direction, actionType, playType, Speed, onFinishCallback);
+            AnimeOption animeOption = CreateAnimeOption(serial, Direction, actionType, playType, Speed,onEffectListener, onFinishCallback);
             if (animeOption == null)
             {
-                if (onFinishCallback != null) onFinishCallback(actionType);
+                onFinishCallback?.Invoke(actionType);
                 // Debug.Log("AnimePlayer:AnimeOption create failed");
                 return this;
             }
             //清空播放队列
             _animeQueue.Clear();
-            //播放
-            _currentSerial = Serial;
+            _animeQueue.Add(animeOption);
             _play(animeOption);
             
             //链式调用,后续可通过nextPlay方法添加动画到播放队列
@@ -266,32 +276,40 @@ namespace CrossgateToolkit
         }
 
         //播放动画
-        public AnimePlayer play(uint Serial, Anime.PlayType playType, float speed = 1f,
-            AnimeCallback onFinishCallback = null)
+        public AnimePlayer play(uint serial, Anime.PlayType playType, float speed = 1f,AnimeEffectListener onEffectListener = null,AnimeCallback onFinishCallback = null)
         {
-            return play(Serial,Anime.DirectionType.North,Anime.ActionType.Stand,playType,speed,onFinishCallback);
+            return play(serial,Anime.DirectionType.North,Anime.ActionType.Idle,playType,speed,onEffectListener,onFinishCallback);
+        }
+        
+        //不改变Serial情况下播放动画
+        public AnimePlayer play(Anime.DirectionType directionType,Anime.ActionType actionType,Anime.PlayType playType,float Speed=1f,AnimeEffectListener onEffectListener=null,AnimeCallback onFinishCallback=null)
+        {
+            return play(_currentSerial, directionType, actionType, playType,
+                Speed,onEffectListener, onFinishCallback);
         }
 
         //播放一次
-        public AnimePlayer playOnce(Anime.DirectionType directionType,Anime.ActionType actionType,float Speed=1f,AnimeCallback onFinishCallback=null)
+        public AnimePlayer playOnce(Anime.DirectionType directionType,Anime.ActionType actionType,float Speed=1f,AnimeEffectListener onEffectListener=null,AnimeCallback onFinishCallback=null)
         {
             return play(_currentSerial, directionType, actionType, Anime.PlayType.Once,
-                Speed, onFinishCallback);
+                Speed, onEffectListener,onFinishCallback);
         }
         
         //播放循环
-        public AnimePlayer playLoop(Anime.DirectionType directionType,Anime.ActionType actionType,float Speed=1f,AnimeCallback onFinishCallback=null)
+        public AnimePlayer playLoop(Anime.DirectionType directionType,Anime.ActionType actionType,float Speed=1f,AnimeEffectListener onEffectListener=null,AnimeCallback onFinishCallback=null)
         {
             return play(_currentSerial, directionType, actionType, Anime.PlayType.Loop,
-                Speed, onFinishCallback);
+                Speed, onEffectListener,onFinishCallback);
         }
 
         //调整动画方向
         public void changeDirection(Anime.DirectionType directionType)
         {
             if (directionType == _currentAnime.Direction || directionType == Anime.DirectionType.NULL) return;
+            // _currentAnime = CreateAnimeOption(_currentAnime.AnimeSerial, directionType, _currentAnime.actionType,
+            //     _currentAnime.playType, _currentAnime.Speed, _currentAnime.onEffectListener,_currentAnime.onFinishCallback);
             _currentAnime = CreateAnimeOption(_currentAnime.AnimeSerial, directionType, _currentAnime.actionType,
-                _currentAnime.playType, _currentAnime.Speed, _currentAnime.onFinishCallback);
+                _currentAnime.playType, _currentAnime.Speed);
             _play(_currentAnime);
         }
         public Anime.DirectionType DirectionType
@@ -310,8 +328,10 @@ namespace CrossgateToolkit
         public void changeActionType(Anime.ActionType actionType)
         {
             if (actionType == _currentAnime.actionType) return;
+            // _currentAnime = CreateAnimeOption(_currentAnime.AnimeSerial, _currentAnime.Direction,actionType,
+            //     _currentAnime.playType, _currentAnime.Speed, _currentAnime.onEffectListener,_currentAnime.onFinishCallback);
             _currentAnime = CreateAnimeOption(_currentAnime.AnimeSerial, _currentAnime.Direction,actionType,
-                _currentAnime.playType, _currentAnime.Speed, _currentAnime.onFinishCallback);
+                _currentAnime.playType, _currentAnime.Speed);
             _play(_currentAnime);
         }
         public Anime.ActionType ActionType
@@ -331,6 +351,8 @@ namespace CrossgateToolkit
         {
             isPlayable = false;
             _currentAnime = null;
+            
+            // Debug.Log("AnimePlayer:play " + animeOption.AnimeSerial + "  " + animeOption.actionType);
             
             AnimeFrame[] frames = new AnimeFrame[animeOption.AnimeDetail.FrameCount];
 
@@ -385,12 +407,15 @@ namespace CrossgateToolkit
                 }
             }
             
-
+            
             _currentAnime = animeOption;
+            _currentSerial = animeOption.AnimeSerial;
             _frames = frames;
             // _currentAnime.CurrentFrame = _currentAnime.CurrentFrame;
-            isPlayable = true;
+            _delay = 0;
             gameObject.SetActive(true);
+            
+            isPlayable = true;
             UpdateFrame();
         }
 
@@ -400,18 +425,24 @@ namespace CrossgateToolkit
             _delay = delayTime*1000;
         }
 
+        //停止播放
         public void Stop()
         {
             isPlayable = false;
             _currentAnime = null;
             _frames = null;
-            _currentAnime.CurrentFrame = 0;
             gameObject.SetActive(false);
         }
 
+        //暂停播放
         public void Pause()
         {
             isPlayable = false;
+        }
+        //恢复播放
+        public void Resume()
+        {
+            isPlayable = true;
         }
 
         //修改播放类型---重复方法--考虑删掉
@@ -422,37 +453,38 @@ namespace CrossgateToolkit
         }
 
         //创建动画配置
-        private AnimeOption CreateAnimeOption(uint Serial, Anime.DirectionType Direction, Anime.ActionType ActionType,
-            Anime.PlayType playType=Anime.PlayType.Once, float Speed = 1f, AnimeCallback onFinishCallback = null)
+        private AnimeOption CreateAnimeOption(uint serial, Anime.DirectionType Direction, Anime.ActionType actionType,
+            Anime.PlayType playType=Anime.PlayType.Once, float Speed = 1f,AnimeEffectListener onEffectListener = null, AnimeCallback onFinishCallback = null)
         {
-            AnimeDetail animeDetail = Anime.GetAnimeDetail(Serial, Direction, ActionType);
+            AnimeDetail animeDetail = Anime.GetAnimeDetail(serial, Direction, actionType);
             if (animeDetail == null)
             {
-                // Debug.Log("AnimePlayer:AnimeDetail is null");
+                // Debug.Log("AnimePlayer:AnimeDetail [" + serial + "] is null");
                 return null;
             }
             AnimeOption animeOption = new AnimeOption()
             {
-                AnimeSerial = Serial,
+                AnimeSerial = serial,
                 Direction = Direction,
-                actionType = ActionType,
+                actionType = actionType,
                 playType = playType,
                 Speed = Speed,
                 FrameRate = animeDetail.CycleTime / Speed / animeDetail.FrameCount,
                 AnimeDetail = animeDetail,
+                onEffectListener = onEffectListener,
                 onFinishCallback = onFinishCallback,
             };
             return animeOption;
         }
 
         //加入链式动画播放队列
-        public AnimePlayer nextPlay(uint Serial, Anime.DirectionType Direction, Anime.ActionType ActionType,
-            Anime.PlayType playType=Anime.PlayType.Once, float Speed = 1f, AnimeCallback onFinishCallback = null)
+        public AnimePlayer nextPlay(uint serial, Anime.DirectionType Direction, Anime.ActionType actionType,
+            Anime.PlayType playType=Anime.PlayType.Once, float Speed = 1f, AnimeEffectListener onEffectListener=null, AnimeCallback onFinishCallback = null)
         {
-            AnimeOption animeOption = CreateAnimeOption(Serial, Direction, ActionType, playType, Speed, onFinishCallback);
+            AnimeOption animeOption = CreateAnimeOption(serial, Direction, actionType, playType, Speed, onEffectListener,onFinishCallback);
             if (animeOption == null)
             {
-                if (onFinishCallback != null) onFinishCallback(ActionType);
+                onFinishCallback?.Invoke(actionType);
                 return this;
             }
             if (_animeQueue.Count == 0)
@@ -461,17 +493,17 @@ namespace CrossgateToolkit
             }
             else
             {
-                _animeQueue.Enqueue(animeOption);    
+                _animeQueue.Add(animeOption);    
             }
             
             return this;
         }
         
         //加入链式动画播放队列
-        public AnimePlayer nextPlay(Anime.DirectionType Direction, Anime.ActionType ActionType,
-            Anime.PlayType playType=Anime.PlayType.Once, float Speed = 1f, AnimeCallback onFinishCallback = null)
+        public AnimePlayer nextPlay(Anime.DirectionType Direction, Anime.ActionType actionType,
+            Anime.PlayType playType=Anime.PlayType.Once, float Speed = 1f,  AnimeEffectListener onEffectListener=null, AnimeCallback onFinishCallback = null)
         {
-            return nextPlay(_currentSerial, Direction, ActionType, playType, Speed, onFinishCallback);
+            return nextPlay(_currentSerial, Direction, actionType, playType, Speed, onEffectListener, onFinishCallback);
         }
         
         // 保持当前帧并切换动画方向(特殊情况如被暴击或击飞后保持受伤帧旋转)
@@ -479,9 +511,12 @@ namespace CrossgateToolkit
         {
             if (directionType == _currentAnime.Direction || directionType == Anime.DirectionType.NULL) return;
             int currentFrame = _currentAnime.CurrentFrame;
+            // _currentAnime = CreateAnimeOption(_currentAnime.AnimeSerial, directionType, _currentAnime.actionType,
+            //     _currentAnime.playType, _currentAnime.Speed, _currentAnime.onEffectListener,_currentAnime.onFinishCallback);
             _currentAnime = CreateAnimeOption(_currentAnime.AnimeSerial, directionType, _currentAnime.actionType,
-                _currentAnime.playType, _currentAnime.Speed, _currentAnime.onFinishCallback);
-            _currentAnime.CurrentFrame = currentFrame;
+                _currentAnime.playType, _currentAnime.Speed);
+            _currentAnime.CurrentFrame = --currentFrame;
+                
             _currentAnime.KeepFrame = true;
             _play(_currentAnime);
         }
@@ -489,8 +524,10 @@ namespace CrossgateToolkit
         //更新计算
         private void Update()
         {
+            
+            if (!isPlayable || _currentAnime==null) return;
             float now = Time.time * 1000;
-            if (_currentAnime != null && (now - _timer - _delay) >= _currentAnime.FrameRate) UpdateFrame();
+            if ((now - _timer - _delay) >= _currentAnime.FrameRate) UpdateFrame();
         }
 
         //更新帧
@@ -502,43 +539,56 @@ namespace CrossgateToolkit
             //动画结束
             if (_currentAnime.CurrentFrame >= _currentAnime.AnimeDetail.FrameCount)
             {
-                if(_currentAnime.onFinishCallback!=null) _currentAnime.onFinishCallback(_currentAnime.actionType);
                 //循环播放
                 if (_currentAnime.playType == Anime.PlayType.Loop)
                 {
+                    _currentAnime.onFinishCallback?.Invoke(_currentAnime.actionType);
                     _currentAnime.CurrentFrame = 0;
-                }else if (_currentAnime.playType == Anime.PlayType.Once || _currentAnime.playType == Anime.PlayType.OnceAndDestroy)
+                }else if (_currentAnime.playType is Anime.PlayType.Once or Anime.PlayType.OnceAndDestroy)
                 {
+                    _animeQueue.RemoveAt(0);
                     if (_currentAnime.playType == Anime.PlayType.OnceAndDestroy)
                     {
                         _spriteRenderer.sprite = null;
                         _imageRenderer.sprite = null;
                         _rectTransform.sizeDelta = Vector2.zero;
+                        _currentAnime.onFinishCallback?.Invoke(_currentAnime.actionType);
                         gameObject.SetActive(false);
+                        return;
                     }
                     //播放下一个动画
                     if(_animeQueue.Count>0)
                     {
-                        AnimeOption animeOption = _animeQueue.Dequeue();
+                        _currentAnime.onFinishCallback?.Invoke(_currentAnime.actionType);
+                        AnimeOption animeOption = _animeQueue[0];
                         _play(animeOption);
                         return;
                     }else
                     {
                         if (_currentAnime.KeepFrame)
                         {
-                            _currentAnime.CurrentFrame--;
+                            _currentAnime.onFinishCallback?.Invoke(_currentAnime.actionType);
+                            // _currentAnime.CurrentFrame--;
                         }
                         else
                         {
                             isPlayable = false;
+                            _currentAnime.onFinishCallback?.Invoke(_currentAnime.actionType);
                             return;
                         }
+                        
                     }
+                    
                 }
+                
             }
             
             //问题帧自动跳过
-            if (_currentAnime.CurrentFrame<_frames.Length && _frames[_currentAnime.CurrentFrame] == null) return;
+            if (_currentAnime.CurrentFrame < _frames.Length && _frames[_currentAnime.CurrentFrame] == null)
+            {
+                _currentAnime.CurrentFrame++;
+                return;
+            }
             
             //根据当前帧Sprite动态调整对象大小
             float width = _frames[_currentAnime.CurrentFrame].Sprite.rect.width * 1f;
@@ -605,9 +655,11 @@ namespace CrossgateToolkit
             _timer = Time.time * 1000;
             
             //动画事件帧监听
-            if(_frames[_currentAnime.CurrentFrame].AnimeFrameInfo.Effect >0 && onEffectListener!=null) onEffectListener(_frames[_currentAnime.CurrentFrame].AnimeFrameInfo.Effect);
+            if (_frames[_currentAnime.CurrentFrame].AnimeFrameInfo.Effect > 0)
+                _currentAnime.onEffectListener?.Invoke(_frames[_currentAnime.CurrentFrame].AnimeFrameInfo.Effect);
             //音频事件帧监听
-            if(_frames[_currentAnime.CurrentFrame].AnimeFrameInfo.AudioIndex >0 && onAudioListener!=null) onAudioListener(_frames[_currentAnime.CurrentFrame].AnimeFrameInfo.AudioIndex);
+            if (_frames[_currentAnime.CurrentFrame].AnimeFrameInfo.AudioIndex > 0)
+                onAudioListener?.Invoke(_frames[_currentAnime.CurrentFrame].AnimeFrameInfo.AudioIndex);
             
             _currentAnime.CurrentFrame++;
         }
