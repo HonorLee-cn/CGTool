@@ -14,6 +14,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using UnityEngine;
+using Object = System.Object;
 
 namespace CrossgateToolkit
 {
@@ -67,6 +68,9 @@ namespace CrossgateToolkit
         //缓存数据
         private static Dictionary<uint, MapInfo> _cache = new Dictionary<uint, MapInfo>();
         private static Dictionary<uint, MapFileInfo> _mapIndexFiles = new Dictionary<uint, MapFileInfo>(); 
+        
+        private static Dictionary<uint,Dictionary<uint,GraphicDetail>> _mapGroundGraphicBatch = new Dictionary<uint, Dictionary<uint, GraphicDetail>>();
+        private static Dictionary<uint,Dictionary<uint,GraphicDetail>> _mapObjectGraphicBatch = new Dictionary<uint, Dictionary<uint, GraphicDetail>>();
 
         //初始化地图文件列表
         public static void Init()
@@ -112,19 +116,65 @@ namespace CrossgateToolkit
         }
         
         // 地面数据合批
-        public static Dictionary<uint,GraphicDetail> BakeGrounds(List<GraphicInfoData> graphicInfoDatas,int palet = 0)
+        public static Dictionary<uint,GraphicDetail> BakeGrounds(uint mapID,List<GraphicInfoData> graphicInfoDatas,int palet = 0,int subPalet = 0,bool linear = false)
         {
-            Dictionary<uint, GraphicDetail>
-                graphicDataDict = GraphicData.BakeGraphics(graphicInfoDatas, palet, 2048, 0);
+            _mapGroundGraphicBatch.TryGetValue(mapID, out var graphicDataDict);
+            if (graphicDataDict == null)
+            {
+                graphicDataDict = GraphicData.BakeGraphics(graphicInfoDatas, true, palet, subPalet, linear, 2048, 0);
+                _mapGroundGraphicBatch[mapID] = graphicDataDict;
+            }
             return graphicDataDict;
         }
         
         // 物件数据合批
-        public static Dictionary<uint,GraphicDetail> BakeObjects(List<GraphicInfoData> graphicInfoDatas,int palet = 0)
+        public static Dictionary<uint,GraphicDetail> BakeObjects(uint mapID,List<GraphicInfoData> graphicInfoDatas,int palet = 0,int subPalet = 0,bool linear = false)
         {
-            Dictionary<uint, GraphicDetail>
-                graphicDataDict = GraphicData.BakeGraphics(graphicInfoDatas, palet, 4096);
+            _mapObjectGraphicBatch.TryGetValue(mapID, out var graphicDataDict);
+            if (graphicDataDict == null)
+            {
+                graphicDataDict = GraphicData.BakeGraphics(graphicInfoDatas, true, palet, subPalet, linear, 4096, 0);
+                _mapObjectGraphicBatch[mapID] = graphicDataDict;
+            }
             return graphicDataDict;
+        }
+        
+        public static void ClearMapBatch(uint mapID)
+        {
+            Dictionary<uint,GraphicDetail> graphicDataDict;
+            List<GraphicDetail> graphicDetails;
+            List<Texture> textures = new List<Texture>();
+            _mapGroundGraphicBatch.TryGetValue(mapID, out graphicDataDict);
+            if (graphicDataDict != null)
+            {
+                graphicDetails = graphicDataDict.Values.ToList();
+                foreach (var graphicDetail in graphicDetails)
+                {
+                    Texture texture = graphicDetail.Sprite.texture;
+                    if (!textures.Contains(texture)) textures.Add(graphicDetail.Sprite.texture);
+                    graphicDetail.SpritePPU100 = null;
+                    graphicDetail.Sprite = null;
+                }
+            }
+            _mapObjectGraphicBatch.TryGetValue(mapID, out graphicDataDict);
+            if (graphicDataDict != null)
+            {
+                graphicDetails = graphicDataDict.Values.ToList();
+                foreach (var graphicDetail in graphicDetails)
+                {
+                    Texture texture = graphicDetail.Sprite.texture;
+                    if (!textures.Contains(texture)) textures.Add(graphicDetail.Sprite.texture);
+                    graphicDetail.SpritePPU100 = null;
+                    graphicDetail.Sprite = null;
+                }
+            }
+            foreach (var texture in textures)
+            {
+                Resources.UnloadAsset(texture);
+            }
+            
+            _mapGroundGraphicBatch.Remove(mapID);
+            _mapObjectGraphicBatch.Remove(mapID);
         }
 
         //加载地图数据

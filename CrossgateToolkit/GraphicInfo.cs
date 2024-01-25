@@ -52,7 +52,7 @@ namespace CrossgateToolkit
         public BinaryReader GraphicReader;
         public byte VERSION_FLAG;
         //已解压的调色板索引
-        public int[] UnpackedPaletIndex;
+        public byte[] UnpackedPaletIndex;
         public List<Color32> InnerPalet;
     }
 
@@ -88,11 +88,23 @@ namespace CrossgateToolkit
                 graphicInfoData.Height = BitConverter.ToUInt32(fileReader.ReadBytes(4),0);
                 graphicInfoData.East = fileReader.ReadByte();
                 graphicInfoData.South = fileReader.ReadByte();
-                graphicInfoData.Blocked =  fileReader.ReadByte() == 0;
+                byte Blocked = fileReader.ReadByte();
+                graphicInfoData.Blocked =  Blocked % 2 == 0;
                 graphicInfoData.AsGround = fileReader.ReadByte() == 1;
                 graphicInfoData.Unknow = fileReader.ReadBytes(4);
                 graphicInfoData.Serial = BitConverter.ToUInt32(fileReader.ReadBytes(4),0);
                 graphicInfoData.GraphicReader = graphicFileReader;
+                // if (graphicInfoData.Serial == 220759)
+                // {
+                //     Debug.LogError(graphicInfoData.Serial + "穿越" + Blocked);
+                //     Debug.LogError(graphicInfoData.Serial + "穿越" + graphicInfoData.Blocked);
+                //     Debug.LogError(graphicInfoData.Serial + "穿越" + graphicInfoData.Width);
+                //     Debug.LogError(graphicInfoData.Serial + "穿越" + graphicInfoData.Height);
+                // } 
+                // if (graphicInfoData.Serial >= 220000 && graphicInfoData.Width == 64 && graphicInfoData.Height == 47 && graphicInfoData.Blocked)
+                // {
+                //     Debug.LogError(graphicInfoData.Serial + "穿越" + Blocked);
+                // }
                 
                 //建立Index映射表
                 _indexCache[Version][graphicInfoData.Index] = graphicInfoData;

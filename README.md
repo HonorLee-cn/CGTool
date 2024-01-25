@@ -37,6 +37,7 @@
 > * `AnimePlayer` [动画播放器挂载组件](#动画播放) 
 >   * `AnimePlayer` 动画关键帧(攻击/攻击完成)事件回调
 >   * `AnimePlayer` 音频帧事件回调
+> * `DynamicGraphic` [动态图集](#动态图集)
 
 <div style="display: flex;flex-direction: column;align-items: center;">
 <div><img style="" src="Preview/AnimeSupport.gif"><img style="" src="Preview/AnimeHSupport.gif"></div>
@@ -44,8 +45,6 @@
 <div><img style="" src="Preview/PUK3Graphic.jpg"></div>
 
 </div>
-
-
 
 ## 3、使用说明
 
@@ -153,10 +152,14 @@ Map.MapInfo mapInfo = Map.GetMap(uint Serial);
 * 合批图档
 * 通过指定图档序列，对图档进行合批处理，并返回合批后的图档数据
 * @param graphicInfoDatas 图档索引数据序列
+* @param AsSerialBatch 以图档编号而非索引号返回合批数据,默认为true,反之则以图档索引号返回数据
 * @param palet 调色板序号
-* @param maxTextureSize 单个Texture最大尺寸，地面数据建议2048，物件数据建议4096
+* @param subPalet 副调色板序号,此项针对动画数据
+* @param linear 以线性过滤方式生成图集
+* @param maxTextureSize 单个Texture最大尺寸，地面数据建议2048，物件数据建议低于4096
 * @param padding 图档间隔，可以有效避免图档渲染时出现多余的黑边或像素黏连
-* @return Dictionary 合批后的图档数据，Key(unit)为图档数据编号，Value为图档数据
+* @param compress 启用压缩
+* @return Dictionary 合批后的图档数据，Key(unit)为图档数据编号(或AsSerialBatch为false时为图档序号)，Value为图档数据
 */
 GraphicData.BakeGraphics(
     List<GraphicInfoData> graphicInfoDatas,
@@ -310,12 +313,73 @@ player.Stop();
 
 ```
 
+### 动态图集
+比```图档合批```更加灵活的动态图集功能，在运行时进行图档图集的写入处理操作
+
+主要针对网游地图的动态获取增加的可扩展动态图集，包含图集建立、自维护和清理
+
+每个动态图集对象内部会根据图档情况进行动态扩充，并采用相对高效的可用空间搜索方式进行图集填充，尽量减少空间浪费
+
+动态图集固定采用 ```图集缓存 + 二级缓存模式```，并采用Unity的Graphic异步复制纹理方式写入图集，最大限度降低图集使用过程中CPU的计算量
+
+```csharp
+/// <summary>
+/// 创建动态图集
+/// </summary>
+/// <param name="GraphicWidth">图集最大宽度</param>
+/// <param name="GraphicHeight">图集最大高度</param>
+/// <param name="GraphicPadding">图集各图档间隔</param>
+/// <param name="palet">调色板编号</param>
+/// <param name="linear">线性过滤</param>
+/// <param name="ppu100">以100的PPU方式生成Sprite对象</param>
+/// <param name="compressWhenFull">当图集对象无可用空间时,对Texture进行压缩</param>
+
+DynamicGraphic(
+    int GraphicWidth,
+    int GraphicHeight,
+    int GraphicPadding = 0,
+    int palet = 0,
+    bool linear = false,
+    bool ppu100 = false,
+    bool compressWhenFull = false)
+
+```
+
+```csharp
+// 创建一个1024*1024尺寸,间距 0 ,调色板编号 0,非线性过滤,输出PPU为100的的动态图集,且进行压缩
+DynamicGraphic dynamicGraphic = new DynamicGraphic(1024, 1024, 0, 0, false, true, true);
+
+// 通过动态图集获取图像
+Sprite sprite = dynamicGraphic.GetSprite(uint Serial);
+
+// 通过协程方式获取图像
+StartCoroutine(dynamicGraphic.GetSpriteSync(uint Serial,(sprite)=>{
+    // 使用回调Sprite
+}));
+
+// 图集清理
+dynamicGraphic.Clear(bool GC = false);
+```
+
 ### 其他
 请根据情况自行探索修改代码适应应用场景
 
 
 
 ## 4、更新日志
+### v 3.0
+> `ADD` 本次大更新主要是性能优化及功能性更新,部分方法调用参数发生变化
+>
+> `ADD` 图档Sprite获取以及动画使用增加线性过滤参数
+>
+> `ADD` 动画使用增加PPU100、线性过滤、图集压缩等参数选项
+>
+> `ADD` 图档获取Sprite时可通过GraphicDetail.SpritePPU100获取PPU为100的Sprite对象
+>
+> `ADD` 增加动态图集 `DynamicGraphic` 类,具体使用方法请参考README示例或查阅代码
+>
+> `UPD` 调整部分代码和图档获取，性能增强，降低CPU压力，减少内存占用等
+
 ### v 2.6
 > `UPD` 修改了Anime初始化过程，将预载全部动画帧修改为读取时加载,减少初始化时间
 >

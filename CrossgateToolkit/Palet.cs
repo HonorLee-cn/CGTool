@@ -88,9 +88,11 @@ namespace CrossgateToolkit
                 color32.r = bytes[0];
                 color32.g = bytes[1];
                 color32.b = bytes[2];
-                color32.a = 0xFF;
+                color32.a = (byte)(i == 0 ? 0x00 : 0xFF);
                 PaletColors.Add(color32);
             }
+
+            
             
             
             for (var i = 0; i < 224; i++)

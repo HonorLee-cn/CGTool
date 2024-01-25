@@ -56,7 +56,7 @@ namespace CrossgateToolkit
         public GraphicInfoData GraphicInfo;
         //动画Sprite
         // public Dictionary<int,Sprite> AnimeSprites = new Dictionary<int, Sprite>();
-        public Dictionary<int,Dictionary<bool,Sprite>> AnimeSprites = new Dictionary<int, Dictionary<bool, Sprite>>();
+        public Dictionary<int,Dictionary<bool,GraphicDetail>> AnimeSprites = new Dictionary<int, Dictionary<bool, GraphicDetail>>();
     }
 
     //动画数据
@@ -80,7 +80,7 @@ namespace CrossgateToolkit
         // 高版本 - 调色板
         public int Palet;
         // 高版本 - 图像反转
-        public AnimeFlag FLAG;
+        public AnimeFlag FLAG = AnimeFlag.NULL;
         // 高版本 - 结束标识
         public byte[] FLAG_END;
         // public Dictionary<int,Texture2D> AnimeTextures = new Dictionary<int, Texture2D>();
@@ -90,12 +90,14 @@ namespace CrossgateToolkit
         // public byte[] unknown;
     }
 
-    public class AnimeFlag
+    [Flags]
+    public enum AnimeFlag
     {
-        public bool REVERSE_X;
-        public bool REVERSE_Y;
-        public bool LOCK_PAL;
-        public bool LIGHT_THROUGH;
+        NULL = 0,
+        REVERSE_X = 1<<0,
+        REVERSE_Y = 1<<1,
+        LOCK_PAL = 1<<2,
+        LIGHT_THROUGH = 1<<3
     }
     
     //动画相关Enum类型
@@ -211,7 +213,6 @@ namespace CrossgateToolkit
             animeInfo.AnimeDatas = new Dictionary<int, Dictionary<int, AnimeDetail>>();
             for (int j = 0; j < animeInfo.ActionCount; j++)
             {
-                
                 // 高版本标识
                 bool isHighVersion = false;
                 animeInfo.DataReader.BaseStream.Position += 16;
@@ -234,15 +235,15 @@ namespace CrossgateToolkit
                     int flag = animeInfo.DataReader.ReadUInt16();
                     if (flag > 0)
                     {
-                        animeData.FLAG = new AnimeFlag();
-                        if ((flag & 1) == (1 << 0)) animeData.FLAG.REVERSE_X = true;
-                        if ((flag & 2) == (1 << 1)) animeData.FLAG.REVERSE_Y = true;
-                        if ((flag & 4) == (1 << 2)) animeData.FLAG.LOCK_PAL = true;
-                        if ((flag & 8) == (1 << 3)) animeData.FLAG.LIGHT_THROUGH = true;    
+                        if ((flag & 1) == (1 << 0)) animeData.FLAG |= AnimeFlag.REVERSE_X;
+                        if ((flag & 2) == (1 << 1)) animeData.FLAG |= AnimeFlag.REVERSE_Y;
+                        if ((flag & 4) == (1 << 2)) animeData.FLAG |= AnimeFlag.LOCK_PAL;
+                        if ((flag & 8) == (1 << 3)) animeData.FLAG |= AnimeFlag.LIGHT_THROUGH;
                     }
                     
                     animeData.FLAG_END = animeInfo.DataReader.ReadBytes(4);
                 }
+                
                 animeData.AnimeFrameInfos = new List<AnimeFrameInfo>();
                 
                 // if (animeInfo.Index == 101201) Debug.Log("----------------------------------");
@@ -315,82 +316,57 @@ namespace CrossgateToolkit
         }
 
         //预处理动画图形合批烘焙
-        public static void BakeAnimeFrames(AnimeDetail animeDetail,int palet = 0, bool linear = false)
+        public static void BakeAnimeFrames(AnimeDetail animeDetail,int palet = 0, bool linear = false,bool compress = false)
         {
-            if (animeDetail.AnimeTextures.ContainsKey(palet))
+            // 查看是否存在缓存Texture数据
+            animeDetail.AnimeTextures.TryGetValue(palet, out var textureDict);
+            if(textureDict!=null)
             {
-                if(animeDetail.AnimeTextures[palet].ContainsKey(linear)) return;
+                if(textureDict.ContainsKey(linear)) return;
             }
+            
             //所有帧的图形数据
             GraphicDetail[] graphicDetails = new GraphicDetail[animeDetail.FrameCount];
             
             //合并后的Texture2D尺寸
             uint textureWidth = 0;
             uint textureHeight = 0;
-            
-            
+            List<GraphicInfoData> graphicInfoDatas = new List<GraphicInfoData>();
+            Dictionary<uint,GraphicInfoData> graphicInfoDataDict = new Dictionary<uint, GraphicInfoData>();
+            int subPaletIndex = -1;
+            if (animeDetail.IsHighVersion) subPaletIndex = (int)animeDetail.Serial;
             for (var i = 0; i < animeDetail.FrameCount; i++)
             {
                 //载入图档
                 GraphicInfoData graphicInfoData = GraphicInfo.GetGraphicInfoDataByIndex(animeDetail.Version,animeDetail.AnimeFrameInfos[i].GraphicIndex);
                 if (graphicInfoData == null) continue;
-                int subPaletIndex = 0;
-                if (animeDetail.IsHighVersion) subPaletIndex = (int)animeDetail.Serial;
-                GraphicDetail graphicDetail = GraphicData.GetGraphicDetail(graphicInfoData, palet, subPaletIndex, linear);
-                if(graphicDetail == null) continue;
-                graphicDetails[i] = graphicDetail;
-                if(graphicDetail.Height > textureHeight) textureHeight = graphicDetail.Height;
-                textureWidth += graphicDetail.Width + 5;
-                animeDetail.AnimeFrameInfos[i].Width = (int) graphicDetail.Width;
-                animeDetail.AnimeFrameInfos[i].Height = (int) graphicDetail.Height;
+                graphicInfoDatas.Add(graphicInfoData);
+                graphicInfoDataDict[graphicInfoData.Index] = graphicInfoData;
+                animeDetail.AnimeFrameInfos[i].GraphicInfo = graphicInfoData;
                 animeDetail.AnimeFrameInfos[i].OffsetX = (int) graphicInfoData.OffsetX;
                 animeDetail.AnimeFrameInfos[i].OffsetY = (int) graphicInfoData.OffsetY;
-                animeDetail.AnimeFrameInfos[i].GraphicInfo = graphicInfoData;
             }
-            //合并图档
-            Texture2D texture2dMix = new Texture2D((int) textureWidth, (int) textureHeight, TextureFormat.RGBA4444, false,linear);
-            if(linear) texture2dMix.filterMode = FilterMode.Bilinear;
-            else texture2dMix.filterMode = FilterMode.Point;
-            Color32 transparentColor = new Color32(0, 0, 0, 0);
-            Color32[] transparentColors = new Color32[texture2dMix.width * texture2dMix.height];
-            for (var i = 0; i < transparentColors.Length; i++)
-            {
-                transparentColors[i] = transparentColor;
-            }
-            texture2dMix.SetPixels32(transparentColors,0);
-            
-            int offsetX = 0;
+
+            Dictionary<uint, GraphicDetail> graphicDetailDict =
+                GraphicData.BakeGraphics(graphicInfoDatas, false, palet, subPaletIndex, linear, 2048, 5, compress);
+            Texture2D texture2dMix = null;
             for (var i = 0; i < animeDetail.FrameCount; i++)
             {
-                GraphicDetail graphicDetail = graphicDetails[i];
+                graphicDetailDict.TryGetValue(animeDetail.AnimeFrameInfos[i].GraphicInfo.Index,out var graphicDetail);
                 if(graphicDetail == null) continue;
-                texture2dMix.SetPixels32((int) offsetX, 0, (int) graphicDetail.Width,
-                    (int) graphicDetail.Height,
-                    graphicDetail.Sprite.texture.GetPixels32());
-                offsetX += (int) graphicDetail.Width + 5;
+                graphicDetails[i] = graphicDetail;
+                if (texture2dMix == null) texture2dMix = graphicDetail.Sprite.texture;
+                
+                AnimeFrameInfo animeFrameInfo = animeDetail.AnimeFrameInfos[i];
+                animeFrameInfo.Width = (int) graphicDetail.Width;
+                animeFrameInfo.Height = (int) graphicDetail.Height;
+                if(!animeFrameInfo.AnimeSprites.ContainsKey(palet)) animeFrameInfo.AnimeSprites[palet] = new Dictionary<bool, GraphicDetail>();
+                if(!animeFrameInfo.AnimeSprites[palet].ContainsKey(linear)) animeFrameInfo.AnimeSprites[palet]
+                    .Add(linear,graphicDetail);
             }
-            texture2dMix.Apply();
             
             if(!animeDetail.AnimeTextures.ContainsKey(palet)) animeDetail.AnimeTextures.Add(palet,new Dictionary<bool, Texture2D>());
-
-            animeDetail.AnimeTextures[palet].Add(linear, texture2dMix);
-            
-            //创建动画每帧Sprite
-            offsetX = 0;
-            for (var l = 0; l < animeDetail.FrameCount; l++)
-            {
-                if(graphicDetails[l] == null) continue;
-                AnimeFrameInfo animeFrameInfo = animeDetail.AnimeFrameInfos[l];
-                Vector2 pivot = new Vector2(0f, 1f);
-                pivot.x += -(animeFrameInfo.OffsetX * 1f) / animeFrameInfo.Width;
-                pivot.y -= (-animeFrameInfo.OffsetY * 1f) / animeFrameInfo.Height;
-                Sprite sprite = Sprite.Create(texture2dMix, new Rect(offsetX, 0,
-                        animeDetail.AnimeFrameInfos[l].Width, animeDetail.AnimeFrameInfos[l].Height),
-                    pivot, 1, 1, SpriteMeshType.FullRect);
-                offsetX += animeDetail.AnimeFrameInfos[l].Width + 5;
-                if(!animeFrameInfo.AnimeSprites.ContainsKey(palet)) animeFrameInfo.AnimeSprites.Add(palet,new Dictionary<bool, Sprite>());
-                animeFrameInfo.AnimeSprites[palet].Add(linear, sprite);
-            }
+            animeDetail.AnimeTextures[palet][linear] = texture2dMix;
             
         }
         

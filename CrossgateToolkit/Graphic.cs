@@ -38,8 +38,7 @@ namespace CrossgateToolkit
         {
             // 解析Bin文件目录结构
             if(!Directory.Exists(CGTool.PATH.BIN)) throw new Exception("图档目录不存在,请检查CGTool中是否配置相应PATH路径");
-
-            float time = Time.realtimeSinceStartup;
+            //float time = Time.realtimeSinceStartup;
             // 整理目录结构,生成对应待处理文件列表
             List<DirectoryInfo> _directorys = new List<DirectoryInfo>();
             _directorys.Add(new DirectoryInfo(CGTool.PATH.BIN));
@@ -48,7 +47,6 @@ namespace CrossgateToolkit
             {
                 AnalysisDirectory(directory);
             }
-
             Debug.Log("[CGTool] 图档资源查找完毕,共找到: (" + _graphicFilePairs.Count + ") 个图档文件, (" + _animeFilePairs.Count +
                       ") 个动画文件");
             
@@ -57,14 +55,13 @@ namespace CrossgateToolkit
             {
                 GraphicInfo.Init(graphicFilePair.Version,graphicFilePair.InfoFile, graphicFilePair.DataFile);
             }
-            
+
             // 预加载 Anime
             foreach (FilePair animeFilePair in _animeFilePairs)
             {
                 Anime.Init(animeFilePair.Version, animeFilePair.InfoFile, animeFilePair.DataFile);
             }
-            
-            Debug.Log("[CGTool] 图档资源加载完毕,耗时: " + (Time.realtimeSinceStartup - time) + "s");
+            //Debug.Log("[CGTool] 图档资源加载完毕,耗时: " + (Time.realtimeSinceStartup - time) + "s");
         }
 
         // 版本号分析
@@ -186,7 +183,7 @@ namespace CrossgateToolkit
         {
             GraphicInfoData graphicInfoData = GraphicInfo.GetGraphicInfoData(serial);
             if (graphicInfoData == null) return null;
-            return GraphicData.GetGraphicDetail(graphicInfoData, palet, 0, linerFilter);
+            return GraphicData.GetGraphicDetail(graphicInfoData, palet, -1, linerFilter);
         }
         
         // 获取图档数据
@@ -194,7 +191,7 @@ namespace CrossgateToolkit
         {
             GraphicInfoData graphicInfoData = GraphicInfo.GetGraphicInfoDataByIndex(Version, index);
             if (graphicInfoData == null) return null;
-            return GraphicData.GetGraphicDetail(graphicInfoData, palet, 0, linerFilter);
+            return GraphicData.GetGraphicDetail(graphicInfoData, palet, -1, linerFilter);
         }
     }
 }

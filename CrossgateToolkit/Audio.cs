@@ -11,6 +11,7 @@
  * 如有其他需要可调整加载方式
  */
 
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -20,6 +21,35 @@ using UnityEngine.Networking;
 
 namespace CrossgateToolkit
 {
+    public class EffectPlayer : MonoBehaviour
+    {
+        public AudioSource audioSource;
+        public delegate void OnAudioPlayEnd();
+        public OnAudioPlayEnd onAudioPlayEnd;
+        private void Awake()
+        {
+            audioSource = gameObject.AddComponent<AudioSource>();
+            audioSource.loop = false;
+            audioSource.playOnAwake = false;
+        }
+
+        public void Play(AudioClip clip)
+        {
+            audioSource.clip = clip;
+            audioSource.Play();
+            StartCoroutine(wait(clip.length));
+        }
+        
+        
+        
+        IEnumerator wait(float length)
+        {
+            yield return new WaitForSeconds(length + 0.3f);
+            onAudioPlayEnd?.Invoke();
+        }
+        
+        
+    }
     public static class Audio
     {
 
@@ -27,7 +57,11 @@ namespace CrossgateToolkit
         private static Dictionary<int, AudioClip> _bgmDic = new Dictionary<int, AudioClip>();
         // 声效音频缓存
         private static Dictionary<int, AudioClip> _effectDic = new Dictionary<int, AudioClip>();
-
+        private static Queue<EffectPlayer> _effectPlayerPool = new Queue<EffectPlayer>();
+        private static GameObject _effectPlayerContainer;
+        private static int lastEffectId = -1;
+        private static int lastEffectTime = -1;
+        public static float EffectVolume = 1f;
         public enum Type
         {
             BGM,
@@ -36,11 +70,13 @@ namespace CrossgateToolkit
         // 播放指定类型、编号的音频AudioClip
         public static void Play(AudioSource audioSource,Type type, int id)
         {
+            // 对于同时间大量同一音效的播放，只播放一次
+            if (type == Type.EFFECT && id == lastEffectId && Time.time - lastEffectTime < 0.1f) return;
             AudioClip audioClip;
             Dictionary<int,AudioClip> dic = type == Type.BGM ? _bgmDic : _effectDic;
             if (dic.TryGetValue(id, out audioClip))
             {
-                _playAudio(audioSource, audioClip);
+                _playAudio(type,audioSource, audioClip);
             }
             else
             {
@@ -55,11 +91,12 @@ namespace CrossgateToolkit
                         if (audioClip == null) return;
                         
                         dic[id] = audioClip;
-                        _playAudio(audioSource, audioClip);
+                        _playAudio(type,audioSource, audioClip);
                     }
                     else
                     {
                         DirectoryInfo directoryInfo = new DirectoryInfo(path);
+                        if(!directoryInfo.Exists) return;
                         FileInfo[] files = directoryInfo.GetFiles(audioName + ".wav", SearchOption.AllDirectories);
                         if (files.Length > 0)
                         {
@@ -70,7 +107,7 @@ namespace CrossgateToolkit
                                 if (loadedAudioClip != null)
                                 {
                                     dic[id] = loadedAudioClip;
-                                    _playAudio(audioSource, loadedAudioClip);
+                                    _playAudio(type,audioSource, loadedAudioClip);
                                 }
                             }));
                         }
@@ -80,11 +117,35 @@ namespace CrossgateToolkit
             }
         }
 
-        private static void _playAudio(AudioSource audioSource, AudioClip audioClip)
+        private static void _playAudio(Type type,AudioSource audioSource, AudioClip audioClip)
         {
-            audioSource.Stop();
-            audioSource.clip = audioClip;
-            audioSource.Play();
+            if (type == Type.EFFECT && audioSource == null)
+            {
+                if(_effectPlayerContainer==null) _effectPlayerContainer = new GameObject("EffectPlayerContainer");
+                EffectPlayer effectPlayer = null;
+                if (_effectPlayerPool.Count > 0)
+                {
+                    effectPlayer = _effectPlayerPool.Dequeue();
+                }
+                else
+                {
+                    effectPlayer = new GameObject("EffectPlayer").AddComponent<EffectPlayer>();
+                    effectPlayer.transform.SetParent(_effectPlayerContainer.transform);
+                    effectPlayer.onAudioPlayEnd = () =>
+                    {
+                        effectPlayer.audioSource.clip = null;
+                        _effectPlayerPool.Enqueue(effectPlayer);
+                    };
+                }
+                effectPlayer.audioSource.volume = EffectVolume;
+                effectPlayer.Play(audioClip);
+            }
+            else
+            {
+                audioSource.Stop();
+                audioSource.clip = audioClip;
+                audioSource.Play();
+            }
         }
         
         private delegate void AudioClipLoaded(AudioClip audioClip);
@@ -406,7 +467,8 @@ namespace CrossgateToolkit
             [436] = "37bird",
             [437] = "38make_gild",//升级
             [438] = "39levelup",
-
+            [500] = "cgply10a",
+            [501] = "cgply10b",
         };
     }
 }

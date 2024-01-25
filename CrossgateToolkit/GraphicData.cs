@@ -39,11 +39,11 @@ namespace CrossgateToolkit
         public int Palet;
         //图档Sprite
         public Sprite Sprite;
+        //图档Sprite(100%PPU)
+        public Sprite SpritePPU100;
         //图档主色调,用于小地图绘制
         public Color32 PrimaryColor;
     }
-    
-    
     
     // 图档数据
     public static class GraphicData
@@ -55,36 +55,68 @@ namespace CrossgateToolkit
         public static Dictionary<GraphicInfoData,Dictionary<int,GraphicDetail>> _linearCache = new Dictionary<GraphicInfoData, Dictionary<int, GraphicDetail>>();
         
         // 获取图档
-        public static GraphicDetail GetGraphicDetail(GraphicInfoData graphicInfoData, int palet = 0,int subPalet = 0,bool asLinear = false)
+        public static GraphicDetail GetGraphicDetail(GraphicInfoData graphicInfoData, int palet = 0,int subPalet = -1,bool asLinear = false,bool cache = true)
         {
             GraphicDetail graphicDetail = null;
 
-            var checkCache = asLinear ? _linearCache : _cache;
-            
-            if (checkCache.ContainsKey(graphicInfoData))
+            if (cache)
             {
-                if (checkCache[graphicInfoData].ContainsKey(palet))
+                var checkCache = asLinear ? _linearCache : _cache;
+            
+                if (checkCache.ContainsKey(graphicInfoData))
                 {
-                    graphicDetail = checkCache[graphicInfoData][palet];
+                    if (checkCache[graphicInfoData].ContainsKey(palet))
+                    {
+                        graphicDetail = checkCache[graphicInfoData][palet];
+                    }
+                    else
+                    {
+                        graphicDetail = _loadGraphicDetail(graphicInfoData, palet, subPalet, asLinear);
+                        checkCache[graphicInfoData].Add(palet, graphicDetail);
+                    }
                 }
                 else
                 {
                     graphicDetail = _loadGraphicDetail(graphicInfoData, palet, subPalet, asLinear);
+                    checkCache.Add(graphicInfoData, new Dictionary<int, GraphicDetail>());
                     checkCache[graphicInfoData].Add(palet, graphicDetail);
                 }
             }
             else
             {
                 graphicDetail = _loadGraphicDetail(graphicInfoData, palet, subPalet, asLinear);
-                checkCache.Add(graphicInfoData, new Dictionary<int, GraphicDetail>());
-                checkCache[graphicInfoData].Add(palet, graphicDetail);
             }
             
             return graphicDetail;
         }
+
+        public static void ClearCache(uint serial,int palet =0,bool asLinear = false)
+        {
+            var checkCache = asLinear ? _linearCache : _cache;
+            GraphicInfoData graphicInfoData = GraphicInfo.GetGraphicInfoData(serial);
+            if (graphicInfoData == null) return;
+            if (checkCache.ContainsKey(graphicInfoData))
+            {
+                if (checkCache[graphicInfoData].ContainsKey(palet))
+                {
+                    GraphicDetail graphicDetail = checkCache[graphicInfoData][palet];
+                    if (graphicDetail != null)
+                    {
+                        UnityEngine.Object.Destroy(graphicDetail.Sprite.texture);
+                        if (graphicDetail.Sprite != null)
+                        {
+                            UnityEngine.Object.Destroy(graphicDetail.Sprite);
+                            UnityEngine.Object.Destroy(graphicDetail.SpritePPU100);
+                        }
+                        graphicDetail = null;
+                    }
+                    checkCache[graphicInfoData].Remove(palet);
+                }
+            }
+        }
         
         // 解析图档
-        private static GraphicDetail _loadGraphicDetail(GraphicInfoData graphicInfoData,int palet = 0,int subPalet = 0,bool asLinear = false)
+        private static GraphicDetail _loadGraphicDetail(GraphicInfoData graphicInfoData,int palet = 0,int subPalet = -1,bool asLinear = false)
         {
             GraphicDetail graphicDetail = new GraphicDetail();
             
@@ -104,18 +136,21 @@ namespace CrossgateToolkit
             Texture2D texture2D;
             Sprite sprite;
 
-            // RGBA4444 减少内存占用
+            // RGBA4444 减少内存占用-对边缘增加1px空白,避免黑线
             texture2D = new Texture2D((int) graphicInfoData.Width, (int) graphicInfoData.Height,
                 TextureFormat.RGBA4444, false, asLinear);
             // 固定点过滤
             if (asLinear) texture2D.filterMode = FilterMode.Bilinear;
             else texture2D.filterMode = FilterMode.Point;
+            texture2D.wrapMode = TextureWrapMode.Clamp;
             texture2D.SetPixels32(pixels.ToArray());
-            // texture2D.LoadRawTextureData(rawTextureData);
             texture2D.Apply();
             
-            sprite = Sprite.Create(texture2D, new Rect(0, 0, texture2D.width, texture2D.height), offset, 1,1,SpriteMeshType.FullRect);
+            sprite = Sprite.Create(texture2D, new Rect(0, 0, texture2D.width, texture2D.height), offset, 1,0,SpriteMeshType.FullRect);
 
+            // 创建PPU为100的sprite
+            Sprite spritePPU100 = Sprite.Create(texture2D, new Rect(0, 0, texture2D.width, texture2D.height), offset, 100,0,SpriteMeshType.FullRect);
+            
             //写入数据
             graphicDetail.Index = graphicInfoData.Index;
             graphicDetail.Serial = graphicInfoData.Serial;
@@ -125,6 +160,7 @@ namespace CrossgateToolkit
             graphicDetail.OffsetY = graphicInfoData.OffsetY;
             graphicDetail.Palet = palet;
             graphicDetail.Sprite = sprite;
+            graphicDetail.SpritePPU100 = spritePPU100;
             return graphicDetail;
         }
 
@@ -134,6 +170,9 @@ namespace CrossgateToolkit
         {
             public int BatchOffsetX;
             public int BatchOffsetY;
+            public GraphicInfoData GraphicInfoData;
+            // public List<Color32> Pixels;
+            public Color32 PrimaryColor;
             public GraphicDetail GraphicDetail;
         }
         // 图档合批
@@ -150,21 +189,26 @@ namespace CrossgateToolkit
         /// 通过指定图档序列，对图档进行合批处理，并返回合批后的图档数据
         /// </summary>
         /// <param name="graphicInfoDatas">图档索引数据序列</param>
+        /// <param name="AsSerialBatch">以图档编号而非索引号返回合批数据</param>
         /// <param name="palet">调色板序号</param>
+        /// <param name="subPalet">副调色板编号(针对动画)</param>
+        /// <param name="linear">线性过滤</param>
         /// <param name="maxTextureSize">单个Texture最大尺寸，地面数据建议2048，物件数据建议4096</param>
         /// <param name="padding">图档间隔，可以有效避免图档渲染时出现多余的黑边或像素黏连</param>
-        /// <returns>合批后的图档数据，Key(unit)为图档数据编号，Value为图档数据</returns>
-        public static Dictionary<uint, GraphicDetail> BakeGraphics(List<GraphicInfoData> graphicInfoDatas,int palet = 0, int maxTextureSize = 2048,int padding = 0)
+        /// <param name="compress">启用压缩</param>
+        /// <returns>合批后的图档数据，Key(unit)为图档数据编号(或AsSerialBatch为false时为图档序号)，Value为图档数据</returns>
+        public static Dictionary<uint, GraphicDetail> BakeGraphics(List<GraphicInfoData> graphicInfoDatas,bool AsSerialBatch = true,int palet = 0,int subPalet = -1,bool linear = false,int maxTextureSize = 2048,int padding = 0,bool compress = false)
         {
             // 单个Texture最大尺寸
             int maxWidth = maxTextureSize;
             int maxHeight = maxTextureSize;
             
             List<TextureData> textureDatas = new List<TextureData>();
-            Dictionary<uint, GraphicDetail> graphicDataDic = new Dictionary<uint, GraphicDetail>();
 
             // 根据objectInfos的内,GraphicInfoData的Width,Height进行排序,优先排序Width,使图档从小到大排列
             graphicInfoDatas = graphicInfoDatas.OrderBy(obj => obj.Width).ThenBy(obj => obj.Height).ToList();
+            // 去重
+            graphicInfoDatas = graphicInfoDatas.Distinct().ToList();
 
             int offsetX = 0;    // X轴偏移量
             int offsetY = 0;    // Y轴偏移量
@@ -195,9 +239,9 @@ namespace CrossgateToolkit
                 BatchData batchData = new BatchData();
                 batchData.BatchOffsetX = offsetX;
                 batchData.BatchOffsetY = offsetY;
-                batchData.GraphicDetail = GetGraphicDetail(graphicInfoData, palet);
-
-                // graphicDatas.Add(graphicData);
+                batchData.GraphicDetail = GetGraphicDetail(graphicInfoData, palet, subPalet, linear, true);
+                batchData.GraphicInfoData = graphicInfoData;
+                batchData.PrimaryColor = batchData.GraphicDetail.PrimaryColor;
                 
                 textureData.BatchDatas.Add(batchData);
                 textureData.GraphicInfoDatas.Add(graphicInfoData);
@@ -212,31 +256,34 @@ namespace CrossgateToolkit
             //最后一次合并
             if (textureData.BatchDatas.Count > 0) textureDatas.Add(textureData);
             
+            Dictionary<uint, GraphicDetail> graphicDataDic = new Dictionary<uint, GraphicDetail>();
             //合并Texture2D
             for (var i = 0; i < textureDatas.Count; i++)
             {
                 TextureData textureDataPiece = textureDatas[i];
+                // 将最大高宽调整为4的倍数,提高渲染效率及适配压缩
+                textureDataPiece.MaxWidth = (int) Math.Ceiling(textureDataPiece.MaxWidth / 4f) * 4;
+                textureDataPiece.MaxHeight = (int) Math.Ceiling(textureDataPiece.MaxHeight / 4f) * 4;
+                
                 // Debug.Log($"合并第{i}个Texture2D,最大高度:{textureDataPiece.MaxHeight},图像数量:{textureDataPiece.GraphicDatas.Count}");
                 Color32[] colors = Enumerable.Repeat(new Color32(0,0,0,0), textureDataPiece.MaxWidth * textureDataPiece.MaxHeight).ToArray();
-                Texture2D texture2DPiece = new Texture2D(textureDataPiece.MaxWidth, textureDataPiece.MaxHeight, TextureFormat.RGBA4444, false, false);
-                texture2DPiece.filterMode = FilterMode.Point;
+                Texture2D texture2DPiece = new Texture2D(textureDataPiece.MaxWidth, textureDataPiece.MaxHeight, TextureFormat.RGBA4444, false, linear);
+                texture2DPiece.filterMode = linear ? FilterMode.Bilinear : FilterMode.Point;
+                texture2DPiece.wrapMode = TextureWrapMode.Clamp;
                 texture2DPiece.SetPixels32(colors);
+                texture2DPiece.Apply();
                 for (var n = 0; n < textureDataPiece.BatchDatas.Count; n++)
                 {
                     BatchData batchData = textureDataPiece.BatchDatas[n];
                     GraphicInfoData graphicInfoData = textureDataPiece.GraphicInfoDatas[n];
-
-                    if (batchData.GraphicDetail!=null)
-                    {
-                        Color32[] pixels = batchData.GraphicDetail.Sprite.texture.GetPixels32();
-                        texture2DPiece.SetPixels32(batchData.BatchOffsetX, batchData.BatchOffsetY, (int) graphicInfoData.Width, (int) graphicInfoData.Height,
-                            pixels.ToArray());
-                    }
+                    Graphics.CopyTexture(batchData.GraphicDetail.Sprite.texture, 0, 0, 0, 0, (int) graphicInfoData.Width,
+                        (int) graphicInfoData.Height, texture2DPiece, 0, 0, batchData.BatchOffsetX,
+                        batchData.BatchOffsetY);
                 }
-                texture2DPiece.Apply();
+                
                 Combine(texture2DPiece, textureDataPiece.BatchDatas);
             }
-
+            
             void Combine(Texture2D texture2D,List<BatchData> batchDatas)
             {
                 for (var i = 0; i < batchDatas.Count; i++)
@@ -244,58 +291,75 @@ namespace CrossgateToolkit
                     BatchData batchData = batchDatas[i];
                     //直接通过Texture2D做偏移,并转为Sprite的偏移量
                     Vector2 offset = new Vector2(0f, 1f);
-                    offset.x += -(batchData.GraphicDetail.OffsetX * 1f) / batchData.GraphicDetail.Width;
-                    offset.y -= (-batchData.GraphicDetail.OffsetY * 1f) / batchData.GraphicDetail.Height;
-
-                    Sprite sprite = Sprite.Create(texture2D, new Rect(batchData.BatchOffsetX, batchData.BatchOffsetY, (int)batchData.GraphicDetail.Width, (int)batchData.GraphicDetail.Height),offset, 1, 1, SpriteMeshType.FullRect);
+                    offset.x += -(batchData.GraphicInfoData.OffsetX * 1f) / batchData.GraphicInfoData.Width;
+                    offset.y -= (-batchData.GraphicInfoData.OffsetY * 1f) / batchData.GraphicInfoData.Height;
+                    
+                    Sprite sprite = Sprite.Create(texture2D,
+                        new Rect(batchData.BatchOffsetX, batchData.BatchOffsetY, (int)batchData.GraphicInfoData.Width,
+                            (int)batchData.GraphicInfoData.Height), offset, 1, 0, SpriteMeshType.FullRect);
+                    Sprite spritePPU100 = Sprite.Create(texture2D,
+                        new Rect(batchData.BatchOffsetX, batchData.BatchOffsetY, (int)batchData.GraphicInfoData.Width,
+                            (int)batchData.GraphicInfoData.Height), offset, 100, 0, SpriteMeshType.FullRect);
                     GraphicDetail graphicDetail = new GraphicDetail()
                     {
-                        Index = batchData.GraphicDetail.Index,
-                        Serial = batchData.GraphicDetail.Serial,
-                        Width = batchData.GraphicDetail.Width,
-                        Height = batchData.GraphicDetail.Height,
-                        OffsetX = batchData.GraphicDetail.OffsetX,
-                        OffsetY = batchData.GraphicDetail.OffsetY,
-                        Palet = batchData.GraphicDetail.Palet,
+                        Index = batchData.GraphicInfoData.Index,
+                        Serial = batchData.GraphicInfoData.Serial,
+                        Width = batchData.GraphicInfoData.Width,
+                        Height = batchData.GraphicInfoData.Height,
+                        OffsetX = batchData.GraphicInfoData.OffsetX,
+                        OffsetY = batchData.GraphicInfoData.OffsetY,
+                        Palet = palet,
                         Sprite = sprite,
-                        PrimaryColor = batchData.GraphicDetail.PrimaryColor
+                        SpritePPU100 = spritePPU100,
+                        PrimaryColor = batchData.PrimaryColor
                     };
-                    
                     // graphicDataPiece.Sprite = sprite;
-                    graphicDataDic.Add(graphicDetail.Serial, graphicDetail);
+                    if (AsSerialBatch) graphicDataDic[graphicDetail.Serial] = graphicDetail; 
+                    else graphicDataDic[graphicDetail.Index] = graphicDetail;
+                    ClearCache(graphicDetail.Serial);
+                    if(compress) texture2D.Compress(true);
                 }
-            }
 
+                
+            }
             return graphicDataDic;
         }
         #endregion
         
         //解压图像数据
-        private static List<Color32> UnpackGraphic(GraphicInfoData graphicInfoData,int PaletIndex=0,int SubPaletIndex=0){
+        public static List<Color32> UnpackGraphic(GraphicInfoData graphicInfoData, int PaletIndex = 0,
+            int SubPaletIndex = -1)
+        {
             List<Color32> pixels = new List<Color32>();
             //获取调色板
-            List<Color32> palet;
+            List<Color32> palet = null;
 
             //调整流指针
             BinaryReader fileReader = graphicInfoData.GraphicReader;
             fileReader.BaseStream.Position = graphicInfoData.Addr;
 
             //读入目标字节集
-            byte[] Content = fileReader.ReadBytes((int) graphicInfoData.Length);
+            byte[] Content = fileReader.ReadBytes((int)graphicInfoData.Length);
 
             //读取缓存字节集
             BinaryReader contentReader = new BinaryReader(new MemoryStream(Content));
 
             //16字节头信息
             byte[] RD = contentReader.ReadBytes(2);
+            // 研究了几个图档数据,这个字节分别有 0~3 不同类型
+            // 猜想一下的话
+            // 0:图档无压缩无内置图档
+            // 1:图档压缩无内置图档
+            // 2:图档无压缩有内置图档
+            // 3:图档压缩有内置图档
             int Version = contentReader.ReadByte();
             int Unknow = contentReader.ReadByte();
             uint Width = contentReader.ReadUInt32();
             uint Height = contentReader.ReadUInt32();
             uint DataLen = contentReader.ReadUInt32();
             uint innerPaletLen = 0;
-            
-            
+
+
             // 低版本头部长度为16,高版本为20
             int headLen = 16;
             if (Version > 1)
@@ -303,66 +367,84 @@ namespace CrossgateToolkit
                 headLen = 20;
                 innerPaletLen = contentReader.ReadUInt32();
             }
-            
+
             //数据长度
             int contentLen = (int)(DataLen - headLen);
-            int pixelLen = (int) (graphicInfoData.Width * graphicInfoData.Height);
-            
-            int[] paletIndex;
-            if (graphicInfoData.UnpackedPaletIndex == null)
+            int pixelLen = (int)(graphicInfoData.Width * graphicInfoData.Height);
+
+            byte[] paletIndexs = graphicInfoData.UnpackedPaletIndex;
+            if (paletIndexs == null)
             {
                 //解压数据
-                byte[] contentBytes = contentReader.ReadBytes((int) contentLen);
-                NativeArray<byte> bytes = new NativeArray<byte>((int) contentBytes.Length, Allocator.TempJob);
+                byte[] contentBytes =
+                    contentReader.ReadBytes((int)Version % 2 == 0 ? (int)(pixelLen + innerPaletLen) : contentLen);
+                NativeArray<byte> bytes = new NativeArray<byte>((int)contentBytes.Length, Allocator.TempJob);
                 bytes.CopyFrom(contentBytes);
                 long decompressLen = pixelLen + innerPaletLen;
-                
-                NativeArray<int> colorIndexs =
-                    new NativeArray<int>((int)decompressLen, Allocator.TempJob);
+
+                NativeArray<byte> colorIndexs =
+                    new NativeArray<byte>((int)decompressLen, Allocator.TempJob);
 
                 DecompressJob decompressJob = new DecompressJob()
                 {
                     bytes = bytes,
-                    compressd = Version != 0,
+                    compressd = Version % 2 != 0,
                     colorIndexs = colorIndexs
                 };
                 // decompressJob.Execute();
                 decompressJob.Schedule().Complete();
+                paletIndexs = colorIndexs.ToArray();
+                graphicInfoData.UnpackedPaletIndex = paletIndexs;
+                
+                // 如果存在内置调色板,则读取内置调色板
+                if (innerPaletLen > 0 && graphicInfoData.InnerPalet == null)
+                {
+                    byte[] innerPaletIndex = paletIndexs.Skip(pixelLen).Take((int)innerPaletLen).ToArray();
+                    graphicInfoData.InnerPalet = AnalysisInnerPalet(innerPaletIndex).ToList();
+                    
+                }
+                
                 bytes.Dispose();
-                paletIndex = colorIndexs.ToArray();
-                graphicInfoData.UnpackedPaletIndex = paletIndex;
                 colorIndexs.Dispose();
             }
-            else
-            {
-                paletIndex = graphicInfoData.UnpackedPaletIndex;
-            }
+            
+            paletIndexs = paletIndexs.Take(pixelLen).ToArray();
 
-            if (SubPaletIndex > 0)
+            // palet = Palet.GetPalet(PaletIndex);
+            // Debug.Log($"PaletIndex:{PaletIndex},SubPaletIndex:{SubPaletIndex},palet:{palet!=null},InnerPalet:{graphicInfoData.InnerPalet!=null}");
+            // 如果指定了外置调色板
+            if (SubPaletIndex >= 0)
             {
                 palet = Palet.GetPalet(SubPaletIndex);
                 if (palet == null)
                 {
                     GraphicInfoData subPaletInfoData = GraphicInfo.GetGraphicInfoData((uint)SubPaletIndex);
-                    Graphic.GetGraphicDetail((uint)SubPaletIndex);
-                    palet = subPaletInfoData.InnerPalet;
-                    Palet.AddPalet(SubPaletIndex, palet);
+                    if (subPaletInfoData != null)
+                    {
+                        Graphic.GetGraphicDetail((uint)SubPaletIndex);
+                        if (subPaletInfoData.InnerPalet != null)
+                        {
+                            palet = subPaletInfoData.InnerPalet;
+                            Palet.AddPalet(SubPaletIndex, palet);
+                        }
+                    }
                 }
             }
-            else
+            
+            if (palet == null)
             {
-                if (innerPaletLen > 0)
+                if (graphicInfoData.InnerPalet != null)
                 {
-                    int[] innerPaletIndex = paletIndex.Skip(pixelLen).Take((int) innerPaletLen).ToArray();
-                    palet = AnalysisInnerPalet(innerPaletIndex).ToList();
-                    paletIndex = paletIndex.Take(pixelLen).ToArray();
-                    graphicInfoData.InnerPalet = palet;
+                    // 没有指定外置调色板,存在内置调色板,则读取内置调色板
+                    palet = graphicInfoData.InnerPalet;
                 }
                 else
                 {
                     palet = Palet.GetPalet(PaletIndex);
+                    if (palet == null) palet = Palet.GetPalet(0);
                 }
             }
+            
             //释放连接
             contentReader.Dispose();
             contentReader.Close();
@@ -371,16 +453,16 @@ namespace CrossgateToolkit
             int r = 0;
             int g = 0;
             int b = 0;
-            foreach (int index in paletIndex)
+            foreach (int index in paletIndexs)
             {
                 Color32 color32;
-                if (index == 999 || (index > palet.Count - 1))
+                if (index == 0 || (index > palet.Count - 1))
                 {
                     color32 = Color.clear;
                 }
                 else
                 {
-                    color32 = palet[index];   
+                    color32 = palet[index];
                 }
                 pixels.Add(color32);
                 r += color32.r;
@@ -418,18 +500,18 @@ namespace CrossgateToolkit
         }
 
         //分析高版本内部调色板
-        private static Color32[] AnalysisInnerPalet(int[] bytes)
+        private static Color32[] AnalysisInnerPalet(byte[] bytes)
         {
             int colorLen = bytes.Length / 3;
             Color32[] palet = new Color32[colorLen + 1];
             for (var i = 0; i < colorLen; i++)
             {
-                int[] paletBytes = bytes.Skip(i * 3).Take(3).ToArray();
+                byte[] paletBytes = bytes.Skip(i * 3).Take(3).ToArray();
                 Color32 color32 = new Color32();
                 color32.r = (byte)paletBytes[2];
                 color32.g = (byte)paletBytes[1];
                 color32.b = (byte)paletBytes[0];
-                color32.a = 0xFF;
+                color32.a = (byte)(i == 0 ? 0x00 : 0xFF);
                 palet[i] = color32;
             }
             palet[colorLen] = Color.clear;
@@ -517,7 +599,7 @@ namespace CrossgateToolkit
                     repeat = head % 0xc0;
                     for (var i = 0; i < repeat; i++)
                     {
-                        colorIndexs.Add(999);
+                        colorIndexs.Add(0);
                     }
 
                 }
@@ -526,7 +608,7 @@ namespace CrossgateToolkit
                     repeat = head % 0xd0 * 0x100 + next();
                     for (var i = 0; i < repeat; i++)
                     {
-                        colorIndexs.Add(999);
+                        colorIndexs.Add(0);
                     }
 
                 }
@@ -535,7 +617,7 @@ namespace CrossgateToolkit
                     repeat = head % 0xe0 * 0x10000 + next() * 0x100 + next();
                     for (var i = 0; i < repeat; i++)
                     {
-                        colorIndexs.Add(999);
+                        colorIndexs.Add(0);
                     }
                 }
             }
@@ -556,7 +638,7 @@ namespace CrossgateToolkit
         [ReadOnly]
         public NativeArray<byte> bytes;
         public bool compressd;
-        public NativeArray<int> colorIndexs;
+        public NativeArray<byte> colorIndexs;
     
         private int _maxIndex;
         private int _index;
@@ -568,7 +650,7 @@ namespace CrossgateToolkit
             if (_index > _maxIndex) return -1;
             return bytes[_index];
         }
-        private void AddColorIndex(int index)
+        private void AddColorIndex(byte index)
         {
             if (_colorIndex > colorIndexs.Length - 1) return;
             colorIndexs[_colorIndex] = index;
@@ -587,7 +669,7 @@ namespace CrossgateToolkit
                 {
                     int pindex = NextByte();
                     if(pindex==-1) break;
-                    AddColorIndex(pindex);
+                    AddColorIndex((byte)pindex);
                 }
             }
             else
@@ -606,7 +688,7 @@ namespace CrossgateToolkit
                         repeat = head;
                         for (var i = 0; i < repeat; i++)
                         {
-                            AddColorIndex(NextByte());
+                            AddColorIndex((byte)NextByte());
                         }
     
                     }
@@ -615,7 +697,7 @@ namespace CrossgateToolkit
                         repeat = head % 0x10 * 0x100 + NextByte();
                         for (var i = 0; i < repeat; i++)
                         {
-                            AddColorIndex(NextByte());
+                            AddColorIndex((byte)NextByte());
                         }
     
                     }
@@ -624,14 +706,14 @@ namespace CrossgateToolkit
                         repeat = head % 0x20 * 0x10000 + NextByte() * 0x100 + NextByte();
                         for (var i = 0; i < repeat; i++)
                         {
-                            AddColorIndex(NextByte());
+                            AddColorIndex((byte)NextByte());
                         }
     
                     }
                     else if (head < 0x90)
                     {
                         repeat = head % 0x80;
-                        int index = NextByte();
+                        byte index = (byte)NextByte();
                         for (var i = 0; i < repeat; i++)
                         {
                             AddColorIndex(index);
@@ -640,7 +722,7 @@ namespace CrossgateToolkit
                     }
                     else if (head < 0xa0)
                     {
-                        int index = NextByte();
+                        byte index = (byte)NextByte();
                         repeat = head % 0x90 * 0x100 + NextByte();
                         for (var i = 0; i < repeat; i++)
                         {
@@ -650,7 +732,7 @@ namespace CrossgateToolkit
                     }
                     else if (head < 0xc0)
                     {
-                        int index = NextByte();
+                        byte index = (byte)NextByte();
                         repeat = head % 0xa0 * 0x10000 + NextByte() * 0x100 + NextByte();
                         for (var i = 0; i < repeat; i++)
                         {
@@ -663,7 +745,7 @@ namespace CrossgateToolkit
                         repeat = head % 0xc0;
                         for (var i = 0; i < repeat; i++)
                         {
-                            AddColorIndex(999);
+                            AddColorIndex(0);
                         }
     
                     }
@@ -672,7 +754,7 @@ namespace CrossgateToolkit
                         repeat = head % 0xd0 * 0x100 + NextByte();
                         for (var i = 0; i < repeat; i++)
                         {
-                            AddColorIndex(999);
+                            AddColorIndex(0);
                         }
     
                     }
@@ -681,7 +763,7 @@ namespace CrossgateToolkit
                         repeat = head % 0xe0 * 0x10000 + NextByte() * 0x100 + NextByte();
                         for (var i = 0; i < repeat; i++)
                         {
-                            AddColorIndex(999);
+                            AddColorIndex(0);
                         }
                     }
                 }
