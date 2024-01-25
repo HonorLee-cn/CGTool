@@ -335,7 +335,7 @@ namespace CrossgateToolkit
             if (useCache)
             {
 	            // 二级缓存模式
-	            GraphicDetail graphicDetail = GraphicData.GetGraphicDetail(graphicInfoData, PaletIndex, 0, Linear, true);
+	            GraphicDetail graphicDetail = GraphicData.GetGraphicDetail(graphicInfoData, PaletIndex, -1, Linear, true);
 	            if (graphicDetail == null) return null;
 	            texture = graphicDetail.Sprite.texture;
 	            PrimaryColor = graphicDetail.PrimaryColor;
