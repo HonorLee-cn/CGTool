@@ -11,7 +11,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text.RegularExpressions;
 using UnityEngine;
 
 namespace CrossgateToolkit
@@ -54,6 +53,17 @@ namespace CrossgateToolkit
         //已解压的调色板索引
         public byte[] UnpackedPaletIndex;
         public List<Color32> InnerPalet;
+
+        public bool IsEncrypted;
+        public EncryptInfo EncryptInfo;
+    }
+
+    public class EncryptInfo
+    {
+        public long PwdIndex;
+        public int PwdLen;
+        public byte[] Pwd;
+        
     }
 
     public class GraphicInfo:MonoBehaviour
@@ -73,8 +83,54 @@ namespace CrossgateToolkit
             FileStream graphicFileStream = graphicFile.OpenRead();
             BinaryReader graphicFileReader = new BinaryReader(graphicFileStream);
             
+            byte[] head = graphicFileReader.ReadBytes(3);
+            bool isEncrypted = false;
+            EncryptInfo encryptInfo = null;
+            if (head[0] == 0x52 && head[1] == 0x44) isEncrypted = false;
+            else
+            {
+                isEncrypted = true;
+                bool fromHead = head[0] % 2 == 0;
+                encryptInfo = new EncryptInfo();
+                encryptInfo.PwdLen = head[2];
+                
+                // 密码索引
+                if (fromHead)
+                {
+                    encryptInfo.PwdIndex = 3 + head[1];
+                }
+                else
+                {
+                    // 获取文件大小
+                    long fileSize = graphicFile.Length;
+                    encryptInfo.PwdIndex = fileSize - encryptInfo.PwdLen - 3 - head[1] + 3;
+                }
+
+                // 获取密码
+                graphicFileStream.Position = encryptInfo.PwdIndex;
+                encryptInfo.Pwd = graphicFileReader.ReadBytes(encryptInfo.PwdLen);
+                
+                // 密码解密
+                byte[] keyCodes = new byte[CGTool.ENCRYPT_KEY.Length];
+                for (var i = 0; i < CGTool.ENCRYPT_KEY.Length; i++)
+                {
+                    // 获取秘钥的ASCII码
+                    byte code = (byte)(CGTool.ENCRYPT_KEY[i]);
+                    keyCodes[i] = code;
+                }
+
+                // 解密密码
+                for (int i = 0; i < encryptInfo.PwdLen; i++)
+                {
+                    for (var i1 = 0; i1 < keyCodes.Length; i1++)
+                    {
+                        encryptInfo.Pwd[i] = (byte)(encryptInfo.Pwd[i] ^ keyCodes[i1]);
+
+                    }
+                }
+            }
+            
             //解析Info数据表
-            // List<GraphicInfoData> infoDatas = new List<GraphicInfoData>();
             long DataLength = fileStream.Length/40;
             for (int i = 0; i < DataLength; i++)
             {
@@ -88,19 +144,13 @@ namespace CrossgateToolkit
                 graphicInfoData.Height = BitConverter.ToUInt32(fileReader.ReadBytes(4),0);
                 graphicInfoData.East = fileReader.ReadByte();
                 graphicInfoData.South = fileReader.ReadByte();
-                byte Blocked = fileReader.ReadByte();
-                graphicInfoData.Blocked =  Blocked % 2 == 0;
+                graphicInfoData.Blocked =  fileReader.ReadByte() % 2 == 0;
                 graphicInfoData.AsGround = fileReader.ReadByte() == 1;
                 graphicInfoData.Unknow = fileReader.ReadBytes(4);
                 graphicInfoData.Serial = BitConverter.ToUInt32(fileReader.ReadBytes(4),0);
                 graphicInfoData.GraphicReader = graphicFileReader;
-                // if (graphicInfoData.Serial == 220759)
-                // {
-                //     Debug.LogError(graphicInfoData.Serial + "穿越" + Blocked);
-                //     Debug.LogError(graphicInfoData.Serial + "穿越" + graphicInfoData.Blocked);
-                //     Debug.LogError(graphicInfoData.Serial + "穿越" + graphicInfoData.Width);
-                //     Debug.LogError(graphicInfoData.Serial + "穿越" + graphicInfoData.Height);
-                // } 
+                graphicInfoData.IsEncrypted = isEncrypted;
+                graphicInfoData.EncryptInfo = encryptInfo;
                 // if (graphicInfoData.Serial >= 220000 && graphicInfoData.Width == 64 && graphicInfoData.Height == 47 && graphicInfoData.Blocked)
                 // {
                 //     Debug.LogError(graphicInfoData.Serial + "穿越" + Blocked);
@@ -127,7 +177,7 @@ namespace CrossgateToolkit
             Debug.Log("[CGTool] 加载GraphicInfo - 文件: [" +
                       // (Graphic.Flag_HighVersion[Version] ? "H" : "N") + "] [" +
                       Version + "] " +
-                      graphicInfoFile.Name + " 贴图总量: " + DataLength);
+                      graphicInfoFile.Name + " 贴图总量: " + DataLength + (isEncrypted ? " 加密图档" : ""));
         }
         
         //获取GraphicInfoData

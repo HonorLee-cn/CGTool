@@ -336,14 +336,85 @@ namespace CrossgateToolkit
 
             //调整流指针
             BinaryReader fileReader = graphicInfoData.GraphicReader;
-            fileReader.BaseStream.Position = graphicInfoData.Addr;
+            BinaryReader contentReader = null;
+            
+            if(graphicInfoData.IsEncrypted)
+            {
+                // 解密
+                long position = graphicInfoData.Addr + 3;
+                byte[] content;
+                // 由于秘钥被嵌入到数据流中,先检查当前位与秘钥位置和长度关系,且图档文件最开始多3个字节的头信息
+                // 1.不包含:位置+数据长度小于秘钥索引
+                if (position + graphicInfoData.Length < graphicInfoData.EncryptInfo.PwdIndex)
+                {
+                    // Debug.Log($"不包含秘钥:{graphicInfoData.Index}");
+                    // 不处理
+                    fileReader.BaseStream.Position = position;
+                    content = fileReader.ReadBytes((int)graphicInfoData.Length);
+                    
+                }else // 2.包含秘钥:位置小于秘钥索引,但是位置+数据长度大于秘钥索引,秘钥将数据分割
+                if (position < graphicInfoData.EncryptInfo.PwdIndex && // 数据索引小于秘钥索引
+                    position + graphicInfoData.Length > graphicInfoData.EncryptInfo.PwdIndex) // 数据索引+数据长度大于秘钥索引 
+                {
+                    // Debug.Log($"包含秘钥:{graphicInfoData.Index}");
+                    // 读取秘钥前数据,注意这里的长度是秘钥索引-数据索引+3
+                    int preLen = (int)(graphicInfoData.EncryptInfo.PwdIndex - position + 3);
+                    fileReader.BaseStream.Position = position;
+                    byte[] preContent = fileReader.ReadBytes(preLen);
+                    // 读取秘钥后数据
+                    int nextLen = (int)(graphicInfoData.Length - preLen);
+                    fileReader.BaseStream.Position = graphicInfoData.EncryptInfo.PwdIndex + graphicInfoData.EncryptInfo.PwdLen;
+                    byte[] nextContent = fileReader.ReadBytes(nextLen);
+                    // 合并数据
+                    content = preContent.Concat(nextContent).ToArray();
+                }
+                else // 3.秘钥之后:位置大于秘钥索引,数据位置需要加上秘钥长度
+                {
+                    // Debug.Log($"秘钥之后:{graphicInfoData.Index}");
+                    fileReader.BaseStream.Position = position + graphicInfoData.EncryptInfo.PwdLen;
+                    content = fileReader.ReadBytes((int)graphicInfoData.Length);
+                }
+                // 读取缓存字节集
+                contentReader = new BinaryReader(new MemoryStream(content));
+                
+                int pwdIndex = 0;
+                byte[] head = contentReader.ReadBytes(2);
+                // 寻找解密头数据的密码索引
+                for (int i = 0; i < graphicInfoData.EncryptInfo.Pwd.Length; i++)
+                {
+                    if((head[0]^graphicInfoData.EncryptInfo.Pwd[i]) == 0x52)
+                    {
+                        int next = i + 1;
+                        if (i == graphicInfoData.EncryptInfo.Pwd.Length - 1) next = 0;
+                        if ((head[1] ^ graphicInfoData.EncryptInfo.Pwd[next]) == 0x44)
+                        {
+                            pwdIndex = i;
+                            break;    
+                        }
+                    }
+                }
+                contentReader.Dispose();
+                
+                // 解密数据
+                for (int i = 0; i < content.Length; i++)
+                {
+                    content[i] = (byte)(content[i] ^ graphicInfoData.EncryptInfo.Pwd[pwdIndex]);
+                    pwdIndex++;
+                    if(pwdIndex >= graphicInfoData.EncryptInfo.Pwd.Length) pwdIndex = 0;
+                }
+                //读取缓存字节集
+                contentReader = new BinaryReader(new MemoryStream(content));
+            }
+            else
+            {
+                fileReader.BaseStream.Position = graphicInfoData.Addr;
+                //读入目标字节集
+                byte[] Content = fileReader.ReadBytes((int)graphicInfoData.Length);
 
-            //读入目标字节集
-            byte[] Content = fileReader.ReadBytes((int)graphicInfoData.Length);
-
-            //读取缓存字节集
-            BinaryReader contentReader = new BinaryReader(new MemoryStream(Content));
-
+                //读取缓存字节集
+                contentReader = new BinaryReader(new MemoryStream(Content));
+            }
+            
             //16字节头信息
             byte[] RD = contentReader.ReadBytes(2);
             // 研究了几个图档数据,这个字节分别有 0~3 不同类型
@@ -358,7 +429,6 @@ namespace CrossgateToolkit
             uint Height = contentReader.ReadUInt32();
             uint DataLen = contentReader.ReadUInt32();
             uint innerPaletLen = 0;
-
 
             // 低版本头部长度为16,高版本为20
             int headLen = 16;

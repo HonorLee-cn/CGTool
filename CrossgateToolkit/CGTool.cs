@@ -41,20 +41,27 @@ namespace CrossgateToolkit
             BGM = Environment.CurrentDirectory + "/bgm",
             AUDIO = Environment.CurrentDirectory + "/se"
         };
+        
+        public static string ENCRYPT_KEY = "";
 
         /**
          * 初始化CGTool,并按顺序加载并初始化指定模块
          * Graphic加载顺序以Bin目录中的文件名排序
          * 其中Bin目录根目录下优先级最高，其次是Bin目录下的子目录
          */
-        public static void Init()
+        public static void Init(string encryptKey = "")
         {
+            // 加密KEY
+            ENCRYPT_KEY = encryptKey;
+            
             // 初始化调色板
             if (PATH.PAL != null) Palet.Init();
             // 初始化图档解析器
             if (PATH.BIN != null) Graphic.Init();
             // 初始化地图索引
             if (PATH.MAP != null) Map.Init();
+            
+            
             Debug.Log("[CGTool] CGTool初始化完成");
         }
 

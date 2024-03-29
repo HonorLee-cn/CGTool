@@ -329,8 +329,6 @@ namespace CrossgateToolkit
             GraphicDetail[] graphicDetails = new GraphicDetail[animeDetail.FrameCount];
             
             //合并后的Texture2D尺寸
-            uint textureWidth = 0;
-            uint textureHeight = 0;
             List<GraphicInfoData> graphicInfoDatas = new List<GraphicInfoData>();
             Dictionary<uint,GraphicInfoData> graphicInfoDataDict = new Dictionary<uint, GraphicInfoData>();
             int subPaletIndex = -1;
