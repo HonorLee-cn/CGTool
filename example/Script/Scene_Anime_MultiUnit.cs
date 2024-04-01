@@ -5,7 +5,7 @@ using CrossgateToolkit;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
-public class Scene_MultiUnit : MonoBehaviour
+public class Scene_Anime_MultiUnit : MonoBehaviour
 {
     public Transform UnitContainer;
     public Prefeb_Unit unitPrefeb;

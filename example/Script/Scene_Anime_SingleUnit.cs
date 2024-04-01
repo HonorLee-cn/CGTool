@@ -5,7 +5,7 @@ using CrossgateToolkit;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class Scene_SingleUnit : MonoBehaviour
+public class Scene_Anime_SingleUnit : MonoBehaviour
 {
     public AnimePlayer animePlayer;
 

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using CrossgateToolkit;
 using UnityEngine;
 
-public class Scene_UnitControl : MonoBehaviour
+public class Scene_Anime_UnitControl : MonoBehaviour
 {
     [Header("单位列表")]
     [Header("跑步单位")] public Prefeb_Unit Unit_Runner;
