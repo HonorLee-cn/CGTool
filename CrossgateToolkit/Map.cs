@@ -29,10 +29,11 @@ namespace CrossgateToolkit
     public class MapBlockData
     {
         public GraphicInfoData GraphicInfo;
-        // public uint GraphicIndex;
+        public int MapIndex;
         public uint MapSerial;
-        public int FixPlayerZ;
-        public int ObjectZIndex = 0;
+        public float ObjectZIndex = 0;
+        public int x;
+        public int y;
     }
     //地图信息
     public class MapInfo
@@ -62,9 +63,6 @@ namespace CrossgateToolkit
     
     public class Map
     {
-        //Z轴修正值
-        public static readonly int FixZIndex = 24;
-        
         //缓存数据
         private static Dictionary<uint, MapInfo> _cache = new Dictionary<uint, MapInfo>();
         private static Dictionary<uint, MapFileInfo> _mapIndexFiles = new Dictionary<uint, MapFileInfo>(); 
@@ -307,7 +305,6 @@ namespace CrossgateToolkit
             MapBlockData[] GroundTiles = new MapBlockData[len];
             MapBlockData[] ObjectTiles = new MapBlockData[len];
             bool[] blockedIndexs = new bool[len];
-            float[] fixPlayerZs = new float[len];
             bool[,] nodes = new bool[mapInfo.Width, mapInfo.Height];
 
             // CGTool.Logger.Write("开始排序时间:" + DateTime.Now);
@@ -322,74 +319,105 @@ namespace CrossgateToolkit
                     
                     MapBlockData mapTile = tempGroundTiles[_tmpindex];
                     MapBlockData ObjectTile = tempObjectTiles[_tmpindex];
-
+                    
                     GroundTiles[index] = mapTile;
                     ObjectTiles[index] = ObjectTile;
-
+                    
                     if (mapTile==null || mapTile.GraphicInfo.Blocked) blockedIndexs[index] = true;
-                    if (ObjectTile!=null && ObjectTile.GraphicInfo !=null && ObjectTile.GraphicInfo.Blocked) blockedIndexs[index] = true;
+
+                    //角色默认层级
+                    float Z = x * 9 + y * 11;
+                    mapInfo.FixPlayerZs[index] = Z;
+
+                    if (ObjectTile != null)
+                    {
+                        ObjectTile.MapIndex = index;
+                        if (!ObjectTile.GraphicInfo.AsGround)
+                        {
+                            ObjectTile.ObjectZIndex = Z + Math.Min(ObjectTile.GraphicInfo.East,ObjectTile.GraphicInfo.South) * 10 - 10;
+                            ObjectTile.x = x;
+                            ObjectTile.y = y;
+                            
+                            if(ObjectTile.GraphicInfo !=null && ObjectTile.GraphicInfo.Blocked) blockedIndexs[index] = true;
+                        }
+                    }
                     
                     nodes[x, y] = !blockedIndexs[index];
-                    
-                    //角色默认层级
-                    // int objectTileZIndex = index * FixZIndex;
-                    fixPlayerZs[index] = 1;
                 }
             }
 
+            // Z轴修正
+            void resetObjectZ(MapBlockData blockData,float Z = 0f)
+            {
+                if (!blockData.GraphicInfo.Blocked)
+                {
+                    blockData.ObjectZIndex = blockData.ObjectZIndex + 0.1f;
+                    return;
+                }
+                int x = blockData.x;
+                int y = blockData.y;
+                if (Z != 0f)
+                {
+                    mapInfo.FixPlayerZs[(int)(y * mapInfo.Width + x)] = Z;
+                    blockData.ObjectZIndex = Z;
+                }
+                else
+                {
+                    Z = blockData.ObjectZIndex;
+                }
+                int ox = x - 1;
+                if (ox >= 0 && (blockData.GraphicInfo.South>2 || blockData.GraphicInfo.Serial==17644))
+                {
+                    int maxHeight = Math.Min(y + blockData.GraphicInfo.South, mapInfo.Height);
+                    float leftZ = Z - 10f;
+                    for(int n = y;n<maxHeight;n++)
+                    {
+                        int _index = (int)(n * mapInfo.Width + ox);
+                        mapInfo.FixPlayerZs[_index] = leftZ + (n-y) * 0.1f;
+                        if (ObjectTiles[_index] != null) if(blockData.GraphicInfo.Serial != 17644 && ObjectTiles[_index].GraphicInfo.Serial== 17644) resetObjectZ(ObjectTiles[_index],leftZ);
+                    }
+                }
+                
+                int oy = y - 1;
+                if (oy >= 0 && (blockData.GraphicInfo.East>2 || blockData.GraphicInfo.Serial==17644))
+                {
+                    int maxWidth = Math.Min(x + blockData.GraphicInfo.East, mapInfo.Width);
+                    float rightZ = Z - 10f;
+                    for(int n = x;n<maxWidth;n++)
+                    {
+                        int _index = (int)(oy * mapInfo.Width + n);
+                        mapInfo.FixPlayerZs[_index] = rightZ + (n-x) * 0.1f;
+                        if (ObjectTiles[_index] != null) if(blockData.GraphicInfo.Serial != 17644 && ObjectTiles[_index].GraphicInfo.Serial == 17644) resetObjectZ(ObjectTiles[_index],rightZ);
+                    }
+                }
+                if (blockData.GraphicInfo.Serial == 17644)
+                {
+                    x = blockData.x - 1;
+                    y = blockData.y - 1;
+                    mapInfo.FixPlayerZs[(int)(y * mapInfo.Width + x)] = Z;
+                }
+            }
+            
             //整理Object Z轴层级遮挡及角色遮挡问题
             for (int y = 0; y < mapInfo.Height; y++)
             {
                 for (int x = 0; x < mapInfo.Width; x++)
                 {
                     int index = x + y * mapInfo.Width;
-                    int objectTileZIndex = index * FixZIndex;
+                    // int objectTileZIndex = index * FixZIndex;
 
                     MapBlockData ObjectTile = ObjectTiles[index];
                     if(ObjectTile==null || ObjectTile.GraphicInfo==null) continue;
                     
-                    //Object默认层级
-                    ObjectTile.ObjectZIndex = objectTileZIndex;
-
-                    //角色Z轴补正
-                    //在自定义排序轴(1,1,-1)情况下,角色Z轴在物件y-1位置,到x+East位置,补正为48*x
-                    //在物件South+1位置,到x+East位置,补正为-48*x
-                    if (!ObjectTile.GraphicInfo.AsGround)
+                    //地图单位Z轴补正
+                    if (!ObjectTile.GraphicInfo.AsGround && ObjectTile.GraphicInfo.Serial != 17644)
                     {
-                        for(int i = x;i<(x+ObjectTile.GraphicInfo.East);i++)
-                        {
-                            int fix = 1;
-                            int oy = y - 1;
-                            int _index = (int) (oy * mapInfo.Width + i);
-                            if (fixPlayerZs[_index] == 1) fixPlayerZs[_index] = fix * (i - x + 1) * 240f + 0.1f;
-
-                            // fix = -1;
-                            // oy = y + ObjectTile.GraphicInfo.South;
-                            // _index = (int) (oy * mapInfo.Width + i);
-                            // if (fixPlayerZs[_index] == 0) fixPlayerZs[_index] = fix * (i - x + 1) * 100;
-                        }
-                        for(int i=y+1;i<(y+ObjectTile.GraphicInfo.South);i++)
-                        {
-                            int fix = 1;
-                            int ox = x - 1;
-                            int _index = (int) (i * mapInfo.Width + ox);
-                            if (fixPlayerZs[_index] == 1) fixPlayerZs[_index] = fix * (i - y - 1) * 240f + 0.1f;
-                        }
+                        resetObjectZ(ObjectTile, ObjectTile.ObjectZIndex);
                     }
-                    else
-                    {
-                        // ObjectTile.ObjectZIndex = 0;
-                    }
-
 
                     //如果物件占地范围大于1x1,则需要处理行走限制
-                    if ((ObjectTile.GraphicInfo.East > 1 || ObjectTile.GraphicInfo.South > 1) && ObjectTile.GraphicInfo.Blocked)
+                    if (ObjectTile.GraphicInfo.Blocked && (ObjectTile.GraphicInfo.East > 1 || ObjectTile.GraphicInfo.South > 1))
                     {
-                        //取物件占地中间点位置
-                        // objectTileZIndex = (x + ObjectTile.GraphicInfo.East / 2 + (y + ObjectTile.GraphicInfo.South / 2) * mapInfo.Width) * FixZIndex;
-                        // ObjectTile.ObjectZIndex = objectTileZIndex;
-                        //取物件左上角位置Z轴复写默认Z轴
-                        // ObjectTile.ObjectZIndex = (x + (y + ObjectTile.GraphicInfo.South) * mapInfo.Width) * FixZIndex;
                         for (int i = x; i < (x + ObjectTile.GraphicInfo.East); i++)
                         {
                             for (int j = y; j < (y+ ObjectTile.GraphicInfo.South); j++)
@@ -408,7 +436,6 @@ namespace CrossgateToolkit
             mapInfo.ObjectDatas = ObjectTiles.ToList();
             mapInfo.BlockedIndexs = blockedIndexs;
             mapInfo.MapNodes = nodes;
-            mapInfo.FixPlayerZs = fixPlayerZs;
             _cache[serial] = mapInfo;
             
             Debug.Log("[CGTool] 读取地图: " + mapInfo.Name);
@@ -416,5 +443,6 @@ namespace CrossgateToolkit
             // CGTool.Logger.Write("地图解析完成时间:" + DateTime.Now);
             return mapInfo;
         }
+        
     }
 }
