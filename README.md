@@ -367,6 +367,10 @@ dynamicGraphic.Clear(bool GC = false);
 
 
 ## 4、更新日志
+
+### v 3.1
+> `UPD` 地图Object层对象及地图单位Z轴算法修正
+
 ### v 3.0
 > `ADD` 本次大更新主要是性能优化及功能性更新,部分方法调用参数发生变化
 >
