@@ -306,6 +306,7 @@ namespace CrossgateToolkit
             MapBlockData[] ObjectTiles = new MapBlockData[len];
             bool[] blockedIndexs = new bool[len];
             bool[,] nodes = new bool[mapInfo.Width, mapInfo.Height];
+            mapInfo.FixPlayerZs = new float[len];
 
             // CGTool.Logger.Write("开始排序时间:" + DateTime.Now);
             //重新排序
